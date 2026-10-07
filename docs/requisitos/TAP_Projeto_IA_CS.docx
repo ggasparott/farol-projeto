@@ -1,0 +1,113 @@
+Termo de Abertura do Projeto (TAP)
+
+*Sistema de IA para Retenção e Customer Success (CS) — Laboratório de Engenharia*
+
+# 1. Justificativa do Projeto
+
+Empresas SaaS B2B perdem clientes (churn) frequentemente porque a equipe de Customer Success só age depois que o cancelamento já está em curso, de forma reativa. Um sistema que antecipe o risco de cancelamento a partir de dados de uso e atendimento permite ação preventiva, reduzindo perda de receita e aumentando a retenção.
+
+# 2. Objetivos do Projeto
+
+- Desenvolver um sistema que analise dados de uso, atendimento e satisfação (NPS) para prever risco de churn.
+
+- Sugerir ações de retenção priorizadas para a equipe de Customer Success.
+
+- Entregar uma Versão Alfa funcional até 14/10/2026 e uma Versão Beta testada até 21/10/2026.
+
+- Concluir o ciclo completo do laboratório (planejamento → deploy) até 18/11/2026.
+
+# 3. Escopo do Projeto
+
+**Está incluso: **
+
+- Modelo de IA para previsão de churn a partir de dados de uso e atendimento.
+
+- Painel para a equipe de CS visualizar clientes em risco e ações sugeridas.
+
+- Cadastro e integração básica de dados de clientes (via importação ou API simulada).
+
+**Está fora de escopo: **
+
+- Integração real com sistemas de CRM/ERP de terceiros (será simulada com dados de exemplo).
+
+- Automação de disparo de ações de retenção (o sistema sugere, a execução é manual nesta versão).
+
+# 4. Premissas
+
+- A equipe terá acesso a um conjunto de dados (real, público ou sintético) de uso/atendimento suficiente para treinar o modelo.
+
+- A metodologia Scrum será seguida, com sprints alinhados aos marcos do laboratório.
+
+- As ferramentas definidas (ProjectLibre, Notion, Trello, Git) estarão disponíveis à equipe.
+
+# 5. Restrições
+
+- Prazo fixo: todas as entregas seguem o calendário do laboratório, de 19/08/2026 a 18/11/2026.
+
+- Equipe formada por alunos, com disponibilidade parcial (conciliada com outras disciplinas).
+
+- Sem orçamento financeiro alocado — uso de ferramentas gratuitas/educacionais.
+
+# 6. Principais Partes Interessadas (Stakeholders)
+
+| **Parte interessada** | **Papel / Interesse** |
+| --- | --- |
+| Gestor(a) de Customer Success (Cliente / PO) | Prioriza o backlog, valida entregas, representa a comunidade atendida |
+| Equipe de desenvolvimento | Gabriel Gasparotto Pantaleão, Ryan Lima, [Integrante 3], [Integrante 4], [Integrante 5] |
+| Professor(a) orientador(a) | Avalia as entregas do laboratório (A1 e A2) e orienta metodologicamente |
+| Equipes de CS/vendas usuárias finais | Utilizarão o sistema no dia a dia; validam usabilidade |
+
+# 7. Riscos Preliminares
+
+| **Risco** | **Impacto** | **Mitigação** |
+| --- | --- | --- |
+| Equipe incompleta (faltam 3 integrantes) | Alto | Definir integrantes até a Entrega 02 (26/08) |
+| Escopo de IA subestimado para o prazo do laboratório | Médio | Priorizar modelo simples (ex.: regressão logística) na Versão Alfa |
+| Falta de dados reais de CS para treinar o modelo | Médio | Usar dataset público/sintético de churn como substituto |
+| Atraso em algum sprint | Médio | Buffer nos sprints de 2 semanas (Banco de Dados e Testes de Aceitação) |
+
+# 8. Marcos Principais
+
+| **Entrega** | **Data** |
+| --- | --- |
+| Entrega 01 – Cronograma | 19/08/2026 |
+| Entrega 02 – Requisitos | 26/08/2026 |
+| Entrega 03 – Banco de Dados | 09/09/2026 |
+| Entrega 04 – Projeto Funcional | 16/09/2026 |
+| Entrega 05 – Interface | 23/09/2026 |
+| Primeira Avaliação (A1) | 30/09/2026 |
+| Entrega 06 – Codificação | 07/10/2026 |
+| Entrega 07 – Versão Alfa | 14/10/2026 |
+| Entrega 08 – Versão Beta | 21/10/2026 |
+| Entrega 09 – Testes de Aceitação | 04/11/2026 |
+| Entrega 10 – Documentação | 11/11/2026 |
+| Segunda Avaliação (A2) | 18/11/2026 |
+| Entrega 11 – Evolução | 18/11/2026 |
+
+# 9. Orçamento
+
+Projeto acadêmico, sem orçamento financeiro alocado. Custos limitados ao uso de ferramentas gratuitas/educacionais (ProjectLibre, Notion, Trello, GitHub) e, eventualmente, créditos gratuitos de APIs de IA para prototipagem.
+
+# 10. Critérios de Sucesso
+
+- Todas as 11 entregas do laboratório concluídas dentro do prazo.
+
+- Modelo de previsão de churn funcional, com resultados apresentáveis (mesmo que com dados simulados).
+
+- Aprovação nas avaliações A1 (30/09) e A2 (18/11).
+
+- Sistema utilizável de ponta a ponta (cadastro de dados → painel de risco → sugestão de ação) na Versão Beta.
+
+# 11. Autoridade do Time / Product Owner
+
+O Product Owner (representando a área de Customer Success) tem autoridade para priorizar e reordenar o backlog do produto. A equipe de desenvolvimento tem autonomia técnica para decidir como implementar cada item, dentro do escopo e prazos definidos neste termo. Mudanças de escopo, prazo ou marcos devem ser alinhadas entre PO, equipe e orientador(a) do laboratório.
+
+# 12. Aprovação
+
+Equipe: Gabriel Gasparotto Pantaleão, Ryan Lima, [Integrante 3], [Integrante 4], [Integrante 5]
+
+Product Owner: ____________________________
+
+Orientador(a): ____________________________
+
+Data: 19/08/2026

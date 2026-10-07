@@ -1,0 +1,409 @@
+**ENTREGA 03 — PROJETO DE BANCO DE DADOS**
+
+Sistema de IA para Retenção e Customer Success (CS)
+
+*Laboratório de Engenharia — Equipe: Gabriel Gasparotto Pantaleão, Ryan Lima*
+
+# 1. Introdução e escopo desta entrega
+
+Este documento consolida o Projeto de Banco de Dados do Sistema de IA para Retenção e Customer Success, elaborado conforme os conceitos de Engenharia de Software trabalhados no laboratório. Reúne o Projeto Conceitual (MER), o Projeto Lógico, o Projeto Físico, o Diagrama de Classes, o script de criação do banco e as stored procedures que implementam os processos de negócio.
+
+O projeto parte dos artefatos das entregas anteriores — Termo de Abertura (TAP), Manual do Projeto e Levantamento de Requisitos (RF01–RF12, RNF01–RNF07) — e dos doze casos de uso (UC01–UC12) já definidos e rastreados na Etapa 2.
+
+SGBD escolhido: PostgreSQL 14+, hospedado no Supabase. A autenticação de usuários é delegada ao Supabase Auth (tabela auth.users), com a tabela usuario deste esquema guardando o perfil de aplicação.
+
+# 2. Projeto Conceitual (MER)
+
+O Modelo Entidade-Relacionamento identifica treze entidades, agrupadas em quatro blocos funcionais: identidade e importação, dados brutos do cliente, avaliação de risco e ações de retenção. Duas entidades — importacao_erro e fator_risco — são entidades fracas: sua existência depende integralmente da entidade forte à qual se associam.
+
+## 2.1 Entidades e atributos principais
+
+| **Entidade** | **Atributos-chave** | **Origem** |
+| --- | --- | --- |
+| Usuario | nome, email, papel | Atores do UC01–UC12 |
+| Cliente | razão social, CNPJ, segmento, plano, status | RF01 / UC01 |
+| Importacao | origem, status, totais | RF02 / UC02 |
+| ImportacaoErro | número da linha, mensagem | UC02 / A2 / E1 |
+| DadoUso | competência, acessos, minutos | RF03 |
+| Atendimento | protocolo, criticidade, tempo de resposta | RF04 |
+| AvaliacaoNPS | nota, data de coleta, categoria | RF05 |
+| ModeloIA | versão, algoritmo, limiares | RNF04 |
+| AnaliseRisco | score, nível de risco, vigência | RF06 / RF07 / RF12 |
+| Fator | código, nome, peso padrão | Normalização — 2FN |
+| FatorRisco | valor observado, contribuição | RF09 / UC09 |
+| AcaoRetencao | código, nível mínimo, prioridade | RF10 / RF11 |
+| AcaoAplicada | status, prioridade, datas | RF10 / RF11 / UC10 |
+
+## 2.2 Cardinalidades e participação (mín, máx)
+
+A cardinalidade máxima define o teto de ocorrências; a participação mínima define se o vínculo é obrigatório. É a participação mínima que determina, no projeto físico, quais colunas de chave estrangeira aceitam nulo.
+
+| **Relacionamento** | **Lado A** | **Lado B** | **Leitura** |
+| --- | --- | --- | --- |
+| Usuario cadastra Cliente | (0,N) | (1,1) | Todo cliente tem responsável; um analista pode não ter cadastrado nenhum |
+| Usuario executa Importacao | (0,N) | (1,1) | Toda importação tem autor — auditoria |
+| Importacao registra ImportacaoErro | (0,N) | (1,1) | Erro não existe sem o lote — entidade fraca |
+| Cliente gera DadoUso | (0,N) | (1,1) | Cliente novo pode ainda não ter uso (TA07) |
+| Cliente abre Atendimento | (0,N) | (1,1) | Idem |
+| Cliente responde AvaliacaoNPS | (0,N) | (1,1) | Idem |
+| Cliente recebe AnaliseRisco | (0,N) | (1,1) | Histórico completo; uma vigente por cliente |
+| ModeloIA calcula AnaliseRisco | (0,N) | (1,1) | Toda análise carrega a versão do modelo (RNF04) |
+| AnaliseRisco explica FatorRisco | (0,N) | (1,1) | 0 fatores quando o cliente está "sem score" |
+| Cliente ↔ AcaoRetencao | (0,N) | (0,N) | Resolvido por AcaoAplicada (associativa) |
+| AnaliseRisco motiva AcaoAplicada | (0,N) | (0,1) | Ação sempre rastreável à análise que a originou |
+
+## 2.3 Decisões de modelagem discutidas
+
+Três pontos em aberto foram resolvidos antes do fechamento do conceitual:
+
+- AcaoRetencao como catálogo fixo + AcaoAplicada como entidade associativa que registra o vínculo cliente–ação–análise, em vez de um registro solto por cliente.
+
+- ModeloIA como entidade própria (não um campo de versão dentro de AnaliseRisco), atendendo RNF04 e permitindo trocar o algoritmo sem alterar o esquema.
+
+- DadoUso com granularidade mensal (agregação), decisão de meio-termo entre série diária (mais precisa, porém mais pesada) e snapshot único (leve, mas insuficiente para medir queda de uso).
+
+- AnaliseRisco mantém histórico completo com flag "vigente", em vez de sobrescrever a análise anterior — exigido pelo UC12 e pelo TA13, que verificam quantos clientes mudaram de nível a cada atualização.
+
+- AcaoAplicada referencia diretamente a AnaliseRisco que a motivou (e não um snapshot de score copiado), o que só é seguro porque a análise nunca é sobrescrita — decisão coerente com o ponto anterior.
+
+# 3. Projeto Lógico
+
+Conversão do MER para o modelo relacional: relacionamento 1:N vira chave estrangeira no lado "muitos"; entidade fraca vira chave primária composta pelo identificador da entidade forte mais o discriminante; relacionamento N:N vira tabela associativa própria.
+
+## 3.1 Esquema relacional
+
+usuario        (id PK, nome, email UK, papel, ativo, criado_em)
+ 
+cliente        (id PK, razao_social, cnpj UK, segmento, plano, valor_mensal,
+                data_inicio_contrato, data_cancelamento, status,
+                usuario_id FK-> usuario, criado_em, atualizado_em)
+ 
+importacao     (id PK, origem, nome_arquivo, usuario_id FK-> usuario, status,
+                total_linhas, total_gravados, total_rejeitados,
+                iniciada_em, finalizada_em)
+ 
+importacao_erro(importacao_id FK-> importacao, numero_linha,
+                campo, mensagem, conteudo_bruto)
+                PK(importacao_id, numero_linha)
+ 
+dado_uso       (cliente_id FK-> cliente, competencia,
+                qtd_acessos, minutos_uso, qtd_usuarios_ativos,
+                importacao_id FK-> importacao)
+                PK(cliente_id, competencia)
+ 
+atendimento    (id PK, cliente_id FK-> cliente, protocolo, assunto, criticidade,
+                status, aberto_em, primeira_resposta_em, fechado_em,
+                tempo_resposta_horas, importacao_id FK-> importacao,
+                UK(cliente_id, protocolo))
+ 
+avaliacao_nps  (id PK, cliente_id FK-> cliente, nota, categoria, data_coleta,
+                comentario, importacao_id FK-> importacao,
+                UK(cliente_id, data_coleta))
+ 
+modelo_ia      (id PK, versao UK, algoritmo, limiar_medio, limiar_alto,
+                acuracia, treinado_em, ativo)
+ 
+analise_risco  (id PK, cliente_id FK-> cliente, modelo_id FK-> modelo_ia,
+                score, nivel_risco, origem, vigente, executada_em)
+ 
+fator          (codigo PK, nome, descricao, peso_padrao)
+ 
+fator_risco    (analise_id FK-> analise_risco, fator_codigo FK-> fator,   PK(analise_id, fator_codigo)
+                valor_observado, contribuicao)
+ 
+acao_retencao  (id PK, codigo UK, nome, descricao,
+                fator_codigo FK-> fator, nivel_minimo, peso_prioridade, ativo)
+ 
+acao_aplicada  (id PK, cliente_id FK-> cliente, acao_id FK-> acao_retencao,
+                analise_id FK-> analise_risco, usuario_id FK-> usuario,
+                status, prioridade, observacao, sugerida_em, executada_em)
+
+## 3.2 Normalização
+
+2FN — a entidade Fator foi extraída durante a checagem de segunda forma normal. Na tabela associativa fator_risco, a descrição do fator ("queda de acessos no período", por exemplo) dependia apenas do código do fator, não da combinação (análise, fator) — dependência parcial da chave composta. Extraindo o catálogo Fator, a tabela associativa passou a conter somente atributos que dependem da chave inteira: valor observado e contribuição.
+
+3FN — quatro colunas são funcionalmente dependentes de outras colunas não-chave, e foram mantidas como desnormalização deliberada, controlada pelo banco:
+
+| **Coluna** | **Deriva de** | **Mecanismo de controle** |
+| --- | --- | --- |
+| analise_risco.nivel_risco | score + limiares do modelo | Trigger (classificação automática) |
+| avaliacao_nps.categoria | nota | Coluna gerada (STORED) |
+| atendimento.tempo_resposta_horas | primeira_resposta_em − aberto_em | Coluna gerada (STORED) |
+| importacao.total_gravados / total_rejeitados | contagem das linhas filhas | Atualizado pela procedure de importação |
+
+*Justificativa: o painel de clientes em risco (UC08) filtra e ordena por nível de risco a cada abertura; recalcular a classificação em tempo de consulta descartaria o índice parcial construído sobre essa coluna. A integridade é garantida pelo banco (trigger ou coluna gerada), não pela aplicação — evitando que a desnormalização vire fonte de inconsistência.*
+
+# 4. Projeto Físico
+
+Decisões de implementação amarradas ao PostgreSQL/Supabase: tipos concretos, estratégia de chaves, políticas de exclusão, índices e a fronteira entre constraint declarativa e trigger.
+
+## 4.1 Decisões transversais
+
+- Identidade: bigint GENERATED ALWAYS AS IDENTITY em vez de serial (sintaxe legada, permite inserção manual de id e quebra da sequência). Exceção: usuario.id é uuid, espelhando auth.users do Supabase.
+
+- Tempo: timestamptz em todos os registros de evento — nunca timestamp sem timezone, para não divergir entre o servidor (UTC) e o fuso local. Datas puras (competência, data de coleta) permanecem date.
+
+- Domínios fechados: implementados como ENUM nativo do PostgreSQL, e não como tabelas de domínio. A ordem de declaração de nivel_risco (SEM_SCORE, BAIXO, MEDIO, ALTO) é significativa — ordena o ORDER BY do painel (UC08) e permite a comparação direta nivel_risco >= nivel_minimo (UC10) sem join adicional.
+
+- Exclusão lógica: nenhuma entidade de negócio sofre DELETE físico. Cliente cancelado é o rótulo positivo de churn usado no treino do modelo (RF06) — apagá-lo fisicamente destruiria o próprio dado de treino. O status distingue CANCELADO (evento de negócio, entra no treino) de INATIVO (correção de cadastro, deve ficar fora do treino).
+
+## 4.2 Políticas de exclusão (ON DELETE)
+
+| **Relacionamento** | **Política** | **Justificativa** |
+| --- | --- | --- |
+| cliente → dado_uso / atendimento / nps | CASCADE | Dado é parte do cliente; útil para expurgar massa de teste |
+| cliente → analise_risco / acao_aplicada | RESTRICT | Histórico que treina o modelo — DELETE acidental deve falhar, não apagar em silêncio |
+| analise_risco → fator_risco | CASCADE | Fator sem análise não tem significado |
+| importacao → dado_uso / atendimento / nps | SET NULL | Dado é proveniência: sobrevive ao lote que o trouxe |
+| usuario → cliente / acao_aplicada | SET NULL | Saída do analista não deve apagar o cliente |
+| fator → fator_risco / acao_retencao | RESTRICT | Catálogo não se apaga com histórico dependente |
+
+## 4.3 Índices
+
+- uq_analise_vigente — índice único parcial em analise_risco(cliente_id) WHERE vigente: garante, no nível de armazenamento, no máximo uma análise vigente por cliente. Independe de qualquer código de aplicação.
+
+- ix_analise_painel — nivel_risco DESC, score DESC WHERE vigente: atende diretamente a consulta do UC08 (painel ordenado por risco).
+
+- ix_atendimento_critico — parcial sobre criticidade ALTA/CRITICA: acelera o cálculo do fator TICKETS_CRITICOS sem indexar tickets de baixa relevância.
+
+- uq_modelo_ativo — índice único parcial em modelo_ia(ativo) WHERE ativo: garante no máximo um modelo ativo por vez, condição exigida pela procedure de cálculo de risco.
+
+## 4.4 Colunas geradas (STORED)
+
+atendimento.tempo_resposta_horas e avaliacao_nps.categoria são colunas geradas pelo próprio PostgreSQL a partir de outras colunas da mesma linha. Diferente de calcular esse valor na aplicação, a coluna gerada torna impossível gravar um valor inconsistente — não é permitido escrever diretamente nela.
+
+# 5. Triggers e Stored Procedures
+
+Critério de decisão adotado: trigger para invariante (regra que deve valer sempre, independentemente de quem grava o dado), stored procedure para processo (sequência de passos com início, meio e fim, iniciada deliberadamente).
+
+## 5.1 Triggers implementadas
+
+| **Trigger** | **Evento** | **Invariante garantida** |
+| --- | --- | --- |
+| trg_cliente_atualizado | BEFORE UPDATE em cliente | atualizado_em sempre reflete a última alteração |
+| trg_cliente_cancelamento | BEFORE INSERT/UPDATE de status | data_cancelamento é preenchida ao cancelar e limpa ao reativar |
+| trg_analise_01_vigencia | BEFORE INSERT em analise_risco | Desmarca a análise anterior antes de inserir a nova |
+| trg_analise_02_classificar | BEFORE INSERT/UPDATE de score | nivel_risco é sempre coerente com score e limiares do modelo (RF07) |
+
+*A dupla camada em analise_risco: a trigger cuida do caso normal (desmarca a anterior antes de inserir), e o índice único parcial uq_analise_vigente é a garantia de fundo — se a trigger falhar por qualquer motivo, o índice barra o estado inválido em vez de permitir duas análises vigentes para o mesmo cliente.*
+
+## 5.2 Stored procedures implementadas
+
+| **Procedure** | **Caso de uso** | **Responsabilidade** |
+| --- | --- | --- |
+| sp_importar_lote | UC02 | Grava clientes em lote numa única transação; linha inválida vai para importacao_erro sem interromper o lote (importação parcial) |
+| sp_calcular_risco_cliente | UC06 / UC12 | Grava análise de risco e fatores atomicamente; recebe score já calculado pelo serviço de predição da aplicação |
+| fn_clientes_para_atualizar | UC12 | Função de leitura: identifica clientes com dados alterados desde a última análise vigente |
+
+A chamada ao modelo de IA (regressão logística) permanece na camada de aplicação — o banco não executa o algoritmo de predição, apenas persiste seu resultado de forma transacional. Essa fronteira evita acoplar o esquema relacional à biblioteca de machine learning escolhida, e mantém a troca de algoritmo (prevista para a Entrega 11) restrita ao código de aplicação.
+
+# 6. Diagrama de Classes
+
+O diagrama de classes complementa o MER com duas informações que o modelo relacional não representa: comportamento (métodos) e classes que não persistem em tabela — os serviços de orquestração. Estrutura em duas camadas: domínio (espelha as tabelas, com métodos) e serviço (orquestra múltiplas classes de domínio, sem estado próprio).
+
+## 6.1 Tipos de ligação utilizados
+
+| **Tipo** | **Notação** | **Critério aplicado** |
+| --- | --- | --- |
+| Composição | Losango preenchido | A parte não sobrevive ao todo e pertence a um único dono (ex.: Cliente–DadoUso) |
+| Agregação | Losango vazio | A parte sobrevive e é compartilhada por vários todos (ex.: AnaliseRisco–ModeloIA) |
+| Associação | Linha simples | As duas classes existem independentemente, com vínculo simples (ex.: Usuario–Cliente) |
+| Dependência | Linha tracejada | Uso momentâneo, sem referência guardada como atributo (ex.: CalculadoraScore–ServicoPredicao) |
+
+*Nota metodológica: as políticas de ON DELETE do projeto físico geralmente coincidem com o tipo de ligação UML (CASCADE ≈ composição, RESTRICT/SET NULL ≈ agregação ou associação), mas não são a mesma decisão. AcaoAplicada é composição de Cliente em UML — não existe ação aplicada sem cliente — mas usa RESTRICT no banco por proteção operacional contra exclusão acidental do histórico.*
+
+## 6.2 Camada de domínio — classes principais
+
+| **Classe** | **Atributos-chave** | **Métodos** |
+| --- | --- | --- |
+| Cliente | razaoSocial, segmento, status, dataInicioContrato | mesesDeContrato(), inativar(), cancelar(), reativar() |
+| DadoUso | competencia, qtdAcessos, minutosUso | variacaoEmRelacaoA(DadoUso) |
+| Atendimento | protocolo, criticidade | tempoRespostaHoras(), ehCritico() |
+| AvaliacaoNPS | nota, dataColeta | categoria() |
+| AnaliseRisco | score, nivelRisco, vigente | fatoresPredominantes(), mudouNivelEmRelacaoA(AnaliseRisco) |
+| ModeloIA | versao, limiarMedio, limiarAlto | classificar(score) |
+| AcaoRetencao | codigo, nivelMinimo, pesoPrioridade | aplicavelA(AnaliseRisco) |
+| AcaoAplicada | status, prioridade | executar(Usuario), descartar(motivo) |
+
+## 6.3 Camada de serviço
+
+Classes que orquestram o fluxo entre entidades de domínio, sem tabela própria no banco:
+
+- ServicoPredicao (interface) — abstrai o algoritmo de machine learning; PredicaoRegressaoLogistica é a implementação inicial prevista para a Versão Alfa.
+
+- CalculadoraScore — monta os atributos do cliente e chama ServicoPredicao para obter a probabilidade de churn.
+
+- ServicoAnaliseRisco — orquestra UC06 e UC12: decide quais clientes recalcular e delega o cálculo em si.
+
+- ImportadorLote — implementa UC02: valida linha a linha e persiste clientes.
+
+- MotorSugestao — implementa UC10: cruza os fatores predominantes de uma análise com o catálogo de ações e gera AcaoAplicada com status SUGERIDA.
+
+- ServicoPainel — implementa UC08 e UC11: lista, prioriza e detalha clientes em risco.
+
+- RepositorioCliente e RepositorioAnalise (interfaces) — abstraem o acesso a dados, permitindo testar as classes de serviço sem depender do banco.
+
+*Limite de escopo importante: MotorSugestao gera ações com status SUGERIDA; a mudança para EXECUTADA é sempre uma ação do analista (Usuario.executar()). Conforme o TAP, a automação de disparo de ações de retenção está fora de escopo — o sistema sugere, a execução é manual.*
+
+Os diagramas de classes completos (camada de domínio e camada de serviço, com todas as multiplicidades) foram produzidos separadamente e constam nos anexos entregues junto a este documento.
+
+# 7. Script de Criação do Banco de Dados
+
+Script completo em anexo (schema_retencao_cs.sql), contendo tipos enumerados, tabelas, constraints, índices, triggers e catálogos iniciais. Executável em PostgreSQL 14+ / Supabase via:
+
+psql -d retencao_cs -f schema_retencao_cs.sql
+
+Trecho representativo — declaração de tipos e da tabela central de análise de risco:
+
+-- 1. TIPOS ENUMERADOS (dominios fechados por definicao de negocio)
+-- =====================================================================
+ 
+-- A ordem de declaracao de nivel_risco e significativa: define a
+-- ordenacao do tipo, usada em ORDER BY (UC08) e na comparacao
+-- nivel_risco >= nivel_minimo (UC10).
+CREATE TYPE nivel_risco        AS ENUM ('SEM_SCORE', 'BAIXO', 'MEDIO', 'ALTO');
+ 
+CREATE TYPE papel_usuario      AS ENUM ('ANALISTA', 'GESTOR', 'ADMIN');
+CREATE TYPE status_cliente     AS ENUM ('ATIVO', 'SUSPENSO', 'CANCELADO', 'INATIVO');
+CREATE TYPE criticidade_ticket AS ENUM ('BAIXA', 'MEDIA', 'ALTA', 'CRITICA');
+CREATE TYPE status_atendimento AS ENUM ('ABERTO', 'EM_ANDAMENTO', 'RESOLVIDO', 'CANCELADO');
+CREATE TYPE origem_importacao  AS ENUM ('ARQUIVO_CSV', 'API_SIMULADA');
+CREATE TYPE status_importacao  AS ENUM ('PROCESSANDO', 'CONCLUIDA', 'PARCIAL', 'CANCELADA');
+CREATE TYPE origem_analise     AS ENUM ('IMPORTACAO', 'MANUAL', 'AGENDADA', 'RECALCULO');
+CREATE TYPE status_acao        AS ENUM ('SUGERIDA', 'PLANEJADA', 'EXECUTADA', 'DESCARTADA');
+ 
+-- =====================================================================
+-- 2. USUARIO
+-- No Supabase a autenticacao vive em auth.users; esta tabela guarda o
+-- perfil de aplicacao. Para amarrar as duas, descomente a FK ao final.
+-- =====================================================================
+ 
+CREATE TABLE usuario (
+    id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    nome          varchar(120)  NOT NULL,
+    email         varchar(160)  NOT NULL,
+    papel         papel_usuario NOT NULL DEFAULT 'ANALISTA',
+    ativo         boolean       NOT NULL DEFAULT true,
+    criado_em     timestamptz   NOT NULL DEFAULT now(),
+    atualizado_em timestamptz   NOT NULL DEFAULT now(),
+    CONSTRAINT uq_usuario_email UNIQUE (email),
+    CONSTRAINT ck_usuario_nome  CHECK (length(btrim(nome)) >= 3)
+);
+ 
+COMMENT ON TABLE  usuario    IS 'Analista/gestor de CS. RF01, atores do UC01-UC12.';
+COMMENT ON COLUMN usuario.id IS 'No Supabase, deve corresponder a auth.users.id.';
+ 
+-- ALTER TABLE usuario
+--     ADD CONSTRAINT fk_usuario_auth
+--     FOREIGN KEY (id) REFERENCES auth.users (id) ON DELETE CASCADE;
+ 
+-- =====================================================================
+ 
+
+O script integral, com as treze tabelas, constraints e triggers, está disponível no arquivo schema_retencao_cs.sql entregue em anexo a este documento.
+
+# 8. Stored Procedures — Código Completo
+
+Arquivo procedures_retencao_cs.sql, executado após o script de criação do banco. Contém sp_importar_lote, sp_calcular_risco_cliente e a função de apoio fn_clientes_para_atualizar.
+
+-- sp_importar_lote (RF02, UC02)
+--
+-- Grava clientes de um lote em uma unica transacao. Linha invalida
+-- vai para importacao_erro e o lote continua (UC02/A2: importacao
+-- parcial). Formato de p_linhas: array de jsonb, um objeto por linha,
+-- ja no formato de saida do parser de CSV/API da aplicacao:
+--   { "razao_social": "...", "cnpj": "...", "segmento": "...",
+--     "plano": "...", "valor_mensal": 0, "data_inicio_contrato": "..." }
+-- =====================================================================
+ 
+CREATE OR REPLACE PROCEDURE sp_importar_lote(
+    p_origem     origem_importacao,
+    p_usuario_id uuid,
+    p_arquivo    varchar,
+    p_linhas     jsonb,
+    INOUT p_importacao_id bigint DEFAULT NULL
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_linha        jsonb;
+    v_numero_linha integer := 0;
+    v_total        integer;
+    v_gravados     integer := 0;
+    v_rejeitados   integer := 0;
+    v_cliente_id   bigint;
+BEGIN
+    IF jsonb_typeof(p_linhas) <> 'array' THEN
+        RAISE EXCEPTION 'p_linhas deve ser um array jsonb (UC02/E1: formato invalido)';
+    END IF;
+ 
+    v_total := jsonb_array_length(p_linhas);
+ 
+    INSERT INTO importacao (origem, nome_arquivo, usuario_id, status, total_linhas)
+    VALUES (p_origem, p_arquivo, p_usuario_id, 'PROCESSANDO', v_total)
+    RETURNING id INTO p_importacao_id;
+ 
+    FOR v_linha IN SELECT * FROM jsonb_array_elements(p_linhas)
+    LOOP
+        v_numero_linha := v_numero_linha + 1;
+ 
+        BEGIN
+            -- UC02/A1: cliente existente (mesmo CNPJ) e atualizado, nao duplicado.
+            INSERT INTO cliente (
+                razao_social, cnpj, segmento, plano,
+                valor_mensal, data_inicio_contrato, usuario_id
+            )
+            VALUES (
+                v_linha->>'razao_social',
+                v_linha->>'cnpj',
+                v_linha->>'segmento',
+                v_linha->>'plano',
+                NULLIF(v_linha->>'valor_mensal', '')::numeric,
+                (v_linha->>'data_inicio_contrato')::date,
+                p_usuario_id
+            )
+            ON CONFLICT (cnpj) DO UPDATE SET
+                razao_social = EXCLUDED.razao_social,
+                segmento     = EXCLUDED.segmento,
+                plano        = EXCLUDED.plano,
+                valor_mensal = EXCLUDED.valor_mensal,
+                status       = 'ATIVO'
+            RETURNING id INTO v_cliente_id;
+ 
+            v_gravados := v_gravados + 1;
+ 
+        EXCEPTION WHEN OTHERS THEN
+            -- Uma linha ruim nao derruba o lote inteiro (UC02/A2).
+            INSERT INTO importacao_erro (importacao_id, numero_linha, mensagem, conteudo_bruto)
+            VALUES (p_importacao_id, v_numero_linha, SQLERRM, v_linha);
+ 
+            v_rejeitados := v_rejeitados + 1;
+        END;
+    END LOOP;
+ 
+    UPDATE importacao
+       SET status           = CASE WHEN v_rejeitados = 0 THEN 'CONCLUIDA' ELSE 'PARCIAL' END,
+           total_gravados   = v_gravados,
+           total_rejeitados = v_rejeitados,
+           finalizada_em    = now()
+     WHERE id = p_importacao_id;
+END;
+$$;
+ 
+COMMENT ON PROCEDURE sp_importar_lote
+    IS 'UC02. Processo completo: valida, grava e produz o resumo de importacao/inconsistencias.';
+ 
+-- =====================================================================
+ 
+
+O código completo das três rotinas, incluindo a função de apoio fn_clientes_para_atualizar, está no arquivo procedures_retencao_cs.sql entregue em anexo.
+
+# 9. Conclusão da etapa
+
+O projeto de banco de dados cobre as treze entidades identificadas a partir dos requisitos funcionais e casos de uso já rastreados, com cardinalidades e participações justificadas, normalização até a 3FN com desnormalização controlada onde há ganho real de desempenho, e duas rotinas de processo que implementam os fluxos centrais do sistema (importação e cálculo de risco). O diagrama de classes estende o modelo relacional com a camada de comportamento e serviço, mantendo rastreabilidade explícita com os casos de uso UC01–UC12.
+
+Próximos passos: Entrega 04 (Projeto Funcional) consome diretamente as classes de serviço aqui definidas; Entrega 05 (Interface) consome o ServicoPainel; Entrega 06 (Codificação) implementa PredicaoRegressaoLogistica como primeira versão concreta de ServicoPredicao.
+
+## 9.1 Base documental
+
+Este documento foi elaborado com base no Termo de Abertura do Projeto (TAP), no Manual do Projeto, no documento de Levantamento de Requisitos (Etapa 1) e no Diagrama de Casos de Uso (Etapa 2), todos fornecidos ou produzidos ao longo do laboratório.

@@ -1,0 +1,32 @@
+Definição da equipe:
+
+Gabriel Gasparotto Pantaleão
+ Ryan Lima
+
+  
+
+Potenciais sistemas (propostas):
+
+Proposta 1 Sistema de IA para retenção e Customer Success (CS)
+
+Descrição: sistema baseado em inteligência artificial que analisa dados de uso e de atendimento (tickets, NPS, frequência de uso) para prever risco de cancelamento (churn) e sugerir ações de retenção à equipe de Customer Success.
+
+Cliente (PO): gestor(a) da Arena Esportiva, Koa House.
+
+Proposta 2 CRM para empresas de terraplanagem
+
+Descrição: sistema de CRM voltado para empresas de terraplanagem, para centralizar o relacionamento com clientes (construtoras, incorporadoras, prefeituras) desde o orçamento até a execução da obra — controle de leads e propostas, histórico de negociação, agendamento de serviços e acompanhamento do status de cada obra/contrato.
+
+Comunidade atendida: empresas de terraplanagem e movimentação de terra, e seus clientes recorrentes (construtoras, incorporadoras, empreiteiras).
+
+Metodologia:
+
+Será adotado o Scrum, conforme recomendado. A justificativa é a compatibilidade com o formato do laboratório: entregas em sprints alinhadas ao cronograma do semestre, backlog priorizado em conjunto com o cliente (PO) e validações incrementais a cada sprint review, o que reduz o risco de retrabalho em um projeto com escopo ainda em definição.
+
+**Esclarecimentos sobre a entrega anterior**
+
+ProjectLibre: ferramenta gratuita de gestão de projetos (alternativa ao MS Project), que planejamos usar para montar o cronograma/Gantt do projeto.
+
+Diagramas (Caso de Uso, Máquina de Estado, Classe, Sequência): diagramas UML previstos para as próximas etapas de modelagem/design do sistema escolhido, ainda não produzidos nesta fase inicial.
+
+Consegui apenas pensar em 2 duas ideias que realmente entregam valor e já imaginar o PO delas.

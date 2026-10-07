@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@theme {
+  --color-fundo: #f2f2f2;
+  --color-marinho: #1f2d3d;
+  --color-aco: #3d6189;
+  --color-aco-claro: #e8eff6;
+  --color-texto: #1f1f1f;
+  --color-suave: #555555;
+  --color-linha: #d4d4d4;
+  --color-risco-alto: #b3261e;
+  --color-risco-medio: #b26a00;
+  --color-risco-baixo: #2e7d4f;
+}
+
+body {
+  background: var(--color-fundo);
+  color: var(--color-texto);
+  font-family: "DejaVu Sans", "Segoe UI", system-ui, sans-serif;
+}
+
+.rotulo {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-aco);
+}

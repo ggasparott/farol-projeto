@@ -1,0 +1,87 @@
+**ETAPA 1 — LEVANTAMENTO E DEFINIÇÃO DE REQUISITOS**
+
+**Sistema de IA para Retenção e Customer Success (CS)**
+
+**1. Objetivo da etapa**
+
+Esta etapa teve como objetivo identificar e organizar as principais necessidades do Sistema de IA para Retenção e Customer Success (CS), estabelecendo os requisitos funcionais, requisitos não funcionais, atores e histórias de usuário que servirão como base para as próximas etapas do projeto.
+
+**2. Visão geral do sistema**
+
+O projeto consiste no desenvolvimento de um sistema capaz de analisar dados de uso, atendimento e satisfação de clientes de empresas SaaS B2B para prever o risco de cancelamento (churn) e sugerir ações de retenção para a equipe de Customer Success.
+
+O fluxo principal definido para o sistema é: dados dos clientes → análise dos dados → previsão de risco de churn → classificação do risco → visualização no painel de CS → sugestão de ação de retenção.
+
+**3. Requisitos funcionais**
+
+| ID | Requisito | Descrição |
+| --- | --- | --- |
+| RF01 | Cadastrar cliente | Permitir o cadastro de informações básicas dos clientes. |
+| RF02 | Importar dados | Permitir a importação de dados de clientes por arquivo ou API simulada. |
+| RF03 | Registrar dados de uso | Armazenar informações relacionadas à utilização do sistema pelo cliente. |
+| RF04 | Registrar atendimentos | Armazenar informações sobre tickets e atendimentos realizados. |
+| RF05 | Registrar NPS | Armazenar avaliações de satisfação dos clientes. |
+| RF06 | Calcular risco de churn | Utilizar o modelo de IA para calcular o risco de cancelamento. |
+| RF07 | Classificar risco | Classificar clientes conforme seu nível de risco. |
+| RF08 | Exibir clientes em risco | Apresentar no painel os clientes com maior risco de churn. |
+| RF09 | Exibir informações do cliente | Permitir consultar os dados utilizados para determinar o risco. |
+| RF10 | Sugerir ações | Apresentar ações de retenção para clientes em risco. |
+| RF11 | Priorizar ações | Ordenar ou indicar quais clientes necessitam de atenção prioritária. |
+| RF12 | Atualizar análise | Permitir atualizar a análise de risco quando novos dados forem disponibilizados. |
+
+**4. Requisitos não funcionais**
+
+| ID | Categoria | Descrição |
+| --- | --- | --- |
+| RNF01 | Usabilidade | A interface deve ser simples e intuitiva para equipes de Customer Success. |
+| RNF02 | Clareza | Os resultados da análise de risco devem ser apresentados de maneira clara. |
+| RNF03 | Segurança | Os dados armazenados dos clientes devem ser protegidos contra acesso não autorizado. |
+| RNF04 | Manutenibilidade | O sistema deve permitir manutenção e evolução do modelo de IA. |
+| RNF05 | Versionamento | O código deve ser versionado utilizando Git/GitHub. |
+| RNF06 | Documentação | As funcionalidades implementadas devem possuir documentação correspondente. |
+| RNF07 | Desempenho | O sistema deve apresentar desempenho adequado para o volume de dados utilizado no projeto. |
+
+**5. Atores e usuários**
+
+| Ator | Responsabilidade |
+| --- | --- |
+| Analista/Gestor de Customer Success | Principal usuário do sistema; consulta os riscos, analisa clientes e utiliza as sugestões de retenção. |
+| Product Owner / Gestor de CS | Representa o cliente, prioriza o backlog e valida as entregas. |
+| Equipe de desenvolvimento | Responsável pela implementação e evolução técnica do sistema. |
+| Professor(a) orientador(a) | Avalia as entregas do laboratório e orienta metodologicamente. |
+
+**6. Histórias de usuário**
+
+**US01 — Cadastro: **Como analista de Customer Success, quero cadastrar clientes no sistema para que seus dados possam ser analisados.
+
+**US02 — Importação: **Como analista de Customer Success, quero importar dados dos clientes para evitar a necessidade de cadastrar todas as informações manualmente.
+
+**US03 — Visualização de risco: **Como analista de Customer Success, quero visualizar o risco de churn dos clientes para identificar aqueles que precisam de atenção.
+
+**US04 — Detalhamento: **Como analista de Customer Success, quero visualizar os dados que influenciaram o risco de um cliente para entender por que ele foi classificado como potencialmente em risco.
+
+**US05 — Sugestão de ação: **Como analista de Customer Success, quero receber sugestões de ações de retenção para saber como agir diante de um cliente em risco.
+
+**US06 — Priorização: **Como analista de Customer Success, quero visualizar os clientes ordenados pelo nível de risco para priorizar meus atendimentos.
+
+**7. Fluxo funcional inicial**
+
+Entrada de dados dos clientes.
+
+Armazenamento dos dados no banco de dados.
+
+Processamento dos dados pelo modelo de IA.
+
+Cálculo e classificação do risco de churn.
+
+Apresentação dos clientes em risco no painel.
+
+Apresentação de sugestões de ações de retenção.
+
+**8. Conclusão da etapa**
+
+Ao final desta etapa, foram definidos os principais requisitos e o fluxo funcional inicial do sistema. Esses elementos estabelecem a base para a modelagem dos dados, construção do banco de dados, definição da arquitetura, desenvolvimento das interfaces e implementação do modelo de previsão de churn nas etapas seguintes.
+
+**9. Base documental**
+
+As definições foram elaboradas com base no Termo de Abertura do Projeto (TAP) e no Manual do Projeto — Sistema de IA para Retenção e Customer Success, fornecidos para o laboratório.
