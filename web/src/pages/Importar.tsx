@@ -31,7 +31,9 @@ export default function Importar() {
         p_origem: 'ARQUIVO_CSV',
         p_arquivo: arquivo.name,
         p_linhas: data,
-      })
+       
+
+      })  
       if (error) throw new Error(error.message)
 
       const [lote, erros] = await Promise.all([
