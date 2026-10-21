@@ -5,9 +5,18 @@ import Aviso from '../components/Aviso'
 import { supabase } from '../lib/supabase'
 import type { Importacao, ImportacaoErro } from '../types'
 
-const COLUNAS = ['razao_social', 'cnpj', 'segmento', 'plano', 'valor_mensal', 'data_inicio_contrato']
+// Clientes primeiro: os demais tipos referenciam o cliente pelo CNPJ.
+const TIPOS = {
+  CLIENTE: { rotulo: 'Clientes', colunas: ['razao_social', 'cnpj', 'segmento', 'plano', 'valor_mensal', 'data_inicio_contrato'] },
+  USO: { rotulo: 'Uso mensal', colunas: ['cnpj', 'competencia', 'qtd_acessos', 'minutos_uso', 'qtd_usuarios_ativos'] },
+  ATENDIMENTO: { rotulo: 'Atendimentos', colunas: ['cnpj', 'protocolo', 'assunto', 'criticidade', 'status', 'aberto_em', 'primeira_resposta_em', 'fechado_em'] },
+  NPS: { rotulo: 'NPS', colunas: ['cnpj', 'nota', 'comentario', 'data_coleta'] },
+} as const
+type Tipo = keyof typeof TIPOS
 
 export default function Importar() {
+  const [tipo, setTipo] = useState<Tipo>('CLIENTE')
+  const COLUNAS: readonly string[] = TIPOS[tipo].colunas
   const [arquivo, setArquivo] = useState<File | null>(null)
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -27,14 +36,14 @@ export default function Importar() {
       if (faltando.length > 0) throw new Error(`Colunas ausentes no arquivo: ${faltando.join(', ')}`)
       if (data.length === 0) throw new Error('O arquivo não contém linhas.')
 
-      const { data: id, error } = await supabase.rpc('fn_importar_lote', {
-        p_origem: 'ARQUIVO_CSV',
-        p_arquivo: arquivo.name,
-        p_linhas: data,
-       
-
-      })  
+      const { data: id, error } = tipo === 'CLIENTE'
+        ? await supabase.rpc('fn_importar_lote', { p_origem: 'ARQUIVO_CSV', p_arquivo: arquivo.name, p_linhas: data })
+        : await supabase.rpc('fn_importar_dados', { p_tipo: tipo, p_arquivo: arquivo.name, p_linhas: data })
       if (error) throw new Error(error.message)
+
+      // Classificacao por IA (OpenAI) via Edge Function; ela cai nas regras se a IA falhar.
+      const { error: erroCalculo } = await supabase.functions.invoke('classificar-risco')
+      if (erroCalculo) throw new Error(`Importado, mas o cálculo de risco falhou: ${erroCalculo.message}`)
 
       const [lote, erros] = await Promise.all([
         supabase.from('importacao').select('*').eq('id', id).single(),
@@ -55,6 +64,13 @@ export default function Importar() {
       <h1 className="mb-6 text-2xl font-bold uppercase">Importar dados de clientes</h1>
 
       <div className="max-w-2xl border border-linha bg-white p-5">
+        <select
+          value={tipo}
+          onChange={(e) => { setTipo(e.target.value as Tipo); setResumo(null); setErro(null) }}
+          className="mb-3 block border border-linha px-2 py-1 text-sm"
+        >
+          {(Object.keys(TIPOS) as Tipo[]).map((t) => <option key={t} value={t}>{TIPOS[t].rotulo}</option>)}
+        </select>
         <p className="mb-3 text-sm text-suave">
           Selecione um arquivo CSV com as colunas: <code className="text-xs">{COLUNAS.join(', ')}</code>.
         </p>
