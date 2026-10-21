@@ -54,7 +54,7 @@ export default function Cadastro() {
             type="text"
             required
             className="w-full border border-linha p-2 text-sm focus:border-aco focus:outline-none"
-            placeholder="Ex: Ryan Lima"
+            placeholder="Ex: Carlos da Silva"
             value={nome}
             onChange={(e) => setNome(e.target.value)}
           />

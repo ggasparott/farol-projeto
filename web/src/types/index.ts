@@ -76,6 +76,13 @@ export interface AcaoRetencao {
   peso_prioridade: number
 }
 
+export interface AcaoAplicada {
+  id: number
+  acao_id: number
+  sugerida_em: string
+  observacao: string | null
+}
+
 export interface Importacao {
   id: number
   status: string

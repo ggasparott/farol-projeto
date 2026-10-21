@@ -5,6 +5,7 @@ import Aviso from '../components/Aviso'
 import RiscoBadge from '../components/RiscoBadge'
 import { useCliente } from '../hooks/useCliente'
 import { supabase } from '../lib/supabase'
+import type { AcaoAplicada } from '../types'
 import { fmtData, fmtDataHora, ORDEM, pct } from '../lib/risco'
 
 function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
@@ -19,7 +20,9 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
 export default function ClienteDetalhe() {
   const id = Number(useParams().id)
   const { dados, carregando, erro } = useCliente(id)
-  const [registradas, setRegistradas] = useState<number[]>([])
+  const [registradas, setRegistradas] = useState<AcaoAplicada[]>([])
+  const [registrando, setRegistrando] = useState<number[]>([])
+  const [comentarios, setComentarios] = useState<Record<number, string>>({})
   const [erroAcao, setErroAcao] = useState<string | null>(null)
 
   if (carregando) return <Aviso>Carregando…</Aviso>
@@ -29,22 +32,43 @@ export default function ClienteDetalhe() {
   }
 
   const { cliente, analise, uso, atendimentos, nps, acoes } = dados
+  const registrosAcao = new Map<number, AcaoAplicada[]>()
+  for (const registro of [...dados.acoesRegistradas, ...registradas]) {
+    const historico = registrosAcao.get(registro.acao_id) ?? []
+    registrosAcao.set(registro.acao_id, [...historico, registro])
+  }
   const fatores = [...(analise?.fator_risco ?? [])].sort((a, b) => b.contribuicao - a.contribuicao)
   const nivel = analise?.nivel_risco ?? 'SEM_SCORE'
   const codigos = new Set(fatores.map((f) => f.fator_codigo))
 
   // UC10: acoes ligadas aos fatores predominantes cujo nivel minimo o cliente atinge.
   const sugestoes = acoes
-    .filter((a) => codigos.has(a.fator_codigo) && ORDEM[a.nivel_minimo] <= ORDEM[nivel])
+    .filter((a) => registrosAcao.has(a.id) || (codigos.has(a.fator_codigo) && ORDEM[a.nivel_minimo] <= ORDEM[nivel]))
     .sort((a, b) => b.peso_prioridade - a.peso_prioridade)
 
-  async function registrar(acaoId: number, prioridade: number) {
+  async function registrar(acaoId: number, prioridade: number, comentario = comentarios[acaoId] ?? '') {
     setErroAcao(null)
-    const { error } = await supabase.from('acao_aplicada').insert({
-      cliente_id: id, acao_id: acaoId, analise_id: analise?.id ?? null, status: 'PLANEJADA', prioridade,
-    })
-    if (error) setErroAcao(error.message)
-    else setRegistradas((r) => [...r, acaoId])
+    setRegistrando((ids) => [...ids, acaoId])
+    try {
+      const { data, error } = await supabase.from('acao_aplicada').insert({
+        cliente_id: id,
+        acao_id: acaoId,
+        analise_id: analise?.id ?? null,
+        status: 'PLANEJADA',
+        prioridade,
+        sugerida_em: new Date().toISOString(),
+        observacao: comentario.trim() || null,
+      }).select('id, acao_id, sugerida_em, observacao').single()
+      if (error) setErroAcao(error.message)
+      else {
+        setRegistradas((registros) => [...registros, data as AcaoAplicada])
+        setComentarios((valores) => ({ ...valores, [acaoId]: '' }))
+      }
+    } catch (e) {
+      setErroAcao(e instanceof Error ? e.message : 'Não foi possível registrar a ação.')
+    } finally {
+      setRegistrando((ids) => ids.filter((registroId) => registroId !== acaoId))
+    }
   }
 
   return (
@@ -91,23 +115,61 @@ export default function ClienteDetalhe() {
             <p className="text-sm">Nenhuma regra corresponde aos fatores. Sugestão genérica: <b>contato ativo</b> com o cliente.</p>
           )}
           <ul className="space-y-3">
-            {sugestoes.map((a) => (
-              <li key={a.id} className="border border-linha p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-bold">{a.nome}</p>
-                    <p className="text-xs text-suave">{a.descricao}</p>
+            {sugestoes.map((a) => {
+              const historico = (registrosAcao.get(a.id) ?? []).sort(
+                (anterior, atual) => atual.sugerida_em.localeCompare(anterior.sugerida_em),
+              )
+              const registrada = historico.length > 0
+              return (
+                <li key={a.id} className="border border-linha p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold">{a.nome}</p>
+                      <p className="text-xs text-suave">{a.descricao}</p>
+                    </div>
+                    <button
+                      disabled={registrada || registrando.includes(a.id)}
+                      onClick={() => registrar(a.id, a.peso_prioridade)}
+                      className="shrink-0 border border-aco px-3 py-1 text-xs font-bold uppercase tracking-wider text-aco hover:bg-aco hover:text-white disabled:border-linha disabled:text-suave disabled:hover:bg-transparent"
+                    >
+                      {registrando.includes(a.id) ? 'Registrando…' : registrada ? 'Registrada' : 'Registrar'}
+                    </button>
                   </div>
-                  <button
-                    disabled={registradas.includes(a.id)}
-                    onClick={() => registrar(a.id, a.peso_prioridade)}
-                    className="shrink-0 border border-aco px-3 py-1 text-xs font-bold uppercase tracking-wider text-aco hover:bg-aco hover:text-white disabled:border-linha disabled:text-suave disabled:hover:bg-transparent"
-                  >
-                    {registradas.includes(a.id) ? 'Registrada' : 'Registrar'}
-                  </button>
-                </div>
-              </li>
-            ))}
+                  {registrada && (
+                    <div className="mt-3">
+                      <p className="text-xs font-bold text-suave">Histórico de registros</p>
+                      <ul className="mt-1 space-y-2 text-xs text-suave">
+                        {historico.map((registro) => (
+                          <li key={registro.id} className="border-l-2 border-linha pl-2">
+                            <p>{fmtDataHora(registro.sugerida_em)}</p>
+                            {registro.observacao && <p>{registro.observacao}</p>}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <label className="mt-3 block text-xs text-suave">
+                    {registrada ? 'Novo comentário' : 'Comentário (opcional)'}
+                    <textarea
+                      value={comentarios[a.id] ?? ''}
+                      onChange={(e) => setComentarios((valores) => ({ ...valores, [a.id]: e.target.value }))}
+                      rows={2}
+                      className="mt-1 block w-full border border-linha p-2 text-sm text-aco"
+                      placeholder="Adicione uma observação sobre esta ação"
+                    />
+                  </label>
+                  {registrada && (
+                    <button
+                      disabled={registrando.includes(a.id) || !(comentarios[a.id] ?? '').trim()}
+                      onClick={() => registrar(a.id, a.peso_prioridade)}
+                      className="mt-2 border border-aco px-3 py-1 text-xs font-bold uppercase tracking-wider text-aco hover:bg-aco hover:text-white disabled:border-linha disabled:text-suave disabled:hover:bg-transparent"
+                    >
+                      {registrando.includes(a.id) ? 'Registrando…' : 'Registrar novo comentário'}
+                    </button>
+                  )}
+                </li>
+              )
+            })}
           </ul>
           {erroAcao && <p className="mt-3 text-sm text-risco-alto">{erroAcao}</p>}
         </Secao>
