@@ -94,7 +94,7 @@ BEGIN
     END LOOP;
 
     UPDATE importacao
-       SET status = CASE WHEN v_rejeitados = 0 THEN 'CONCLUIDA' ELSE 'PARCIAL' END,
+       SET status = (CASE WHEN v_rejeitados = 0 THEN 'CONCLUIDA' ELSE 'PARCIAL' END)::status_importacao,
            total_gravados = v_gravados, total_rejeitados = v_rejeitados, finalizada_em = now()
      WHERE id = v_id;
 
