@@ -37,7 +37,13 @@ BEGIN
     LOOP
         v_n := v_n + 1;
         BEGIN
-            SELECT id INTO v_cliente FROM cliente WHERE cnpj = v_linha->>'cnpj';
+            IF NOT COALESCE(fn_cnpj_valido(v_linha->>'cnpj'), false) THEN
+                RAISE EXCEPTION 'CNPJ invalido';
+            END IF;
+
+            SELECT id INTO v_cliente
+              FROM cliente
+             WHERE cnpj = upper(regexp_replace(v_linha->>'cnpj', '[^0-9A-Za-z]', '', 'g'));
             IF v_cliente IS NULL THEN
                 RAISE EXCEPTION 'Cliente com CNPJ % nao encontrado (importe os clientes primeiro)', v_linha->>'cnpj';
             END IF;
@@ -99,5 +105,67 @@ BEGIN
      WHERE id = v_id;
 
     RETURN v_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION fn_importar_conjunto(p_importacoes jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_tipo       text;
+    v_arquivo    varchar;
+    v_linhas     jsonb;
+    v_id         bigint;
+    v_ids        jsonb := '{}'::jsonb;
+    v_tipos      text[] := ARRAY['CLIENTE', 'USO', 'ATENDIMENTO', 'NPS'];
+BEGIN
+    IF p_importacoes IS NULL
+       OR jsonb_typeof(p_importacoes) <> 'object'
+       OR p_importacoes = '{}'::jsonb THEN
+        RAISE EXCEPTION 'p_importacoes deve ser um objeto JSON com arquivos';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+          FROM jsonb_object_keys(p_importacoes) AS item(tipo)
+         WHERE NOT item.tipo = ANY(v_tipos)
+    ) THEN
+        RAISE EXCEPTION 'Tipo de importacao invalido no conjunto';
+    END IF;
+
+    FOREACH v_tipo IN ARRAY v_tipos LOOP
+        IF p_importacoes ? v_tipo THEN
+            IF jsonb_typeof(p_importacoes->v_tipo) <> 'object' THEN
+                RAISE EXCEPTION 'A importacao % deve ser um objeto', v_tipo;
+            END IF;
+
+            v_arquivo := p_importacoes->v_tipo->>'arquivo';
+            v_linhas := p_importacoes->v_tipo->'linhas';
+            IF v_arquivo IS NULL OR btrim(v_arquivo) = ''
+               OR v_linhas IS NULL
+               OR jsonb_typeof(v_linhas) <> 'array' THEN
+                RAISE EXCEPTION 'Arquivo ou linhas invalidos para a importacao %', v_tipo;
+            END IF;
+            IF jsonb_array_length(v_linhas) = 0 THEN
+                RAISE EXCEPTION 'Arquivo ou linhas invalidos para a importacao %', v_tipo;
+            END IF;
+        END IF;
+    END LOOP;
+
+    FOREACH v_tipo IN ARRAY v_tipos LOOP
+        IF p_importacoes ? v_tipo THEN
+            v_arquivo := p_importacoes->v_tipo->>'arquivo';
+            v_linhas := p_importacoes->v_tipo->'linhas';
+            IF v_tipo = 'CLIENTE' THEN
+                CALL sp_importar_lote('ARQUIVO_CSV', auth.uid(), v_arquivo, v_linhas, v_id);
+            ELSE
+                v_id := fn_importar_dados(v_tipo, v_arquivo, v_linhas);
+            END IF;
+            v_ids := v_ids || jsonb_build_object(v_tipo, v_id);
+        END IF;
+    END LOOP;
+
+    RETURN v_ids;
 END;
 $$;

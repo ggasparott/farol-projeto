@@ -64,6 +64,53 @@ COMMENT ON COLUMN usuario.id IS 'No Supabase, deve corresponder a auth.users.id.
 -- INATIVO marca cadastro invalido, que deve ficar fora do treino.
 -- =====================================================================
 
+CREATE OR REPLACE FUNCTION fn_cnpj_valido(p_cnpj text)
+RETURNS boolean
+LANGUAGE plpgsql
+IMMUTABLE
+STRICT
+PARALLEL SAFE
+AS $$
+DECLARE
+    v_cnpj       text := upper(regexp_replace(p_cnpj, '[^0-9A-Za-z]', '', 'g'));
+    v_pesos_1    integer[] := ARRAY[5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    v_pesos_2    integer[] := ARRAY[6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    v_soma       integer;
+    v_resto      integer;
+    v_digito     integer;
+    v_i          integer;
+BEGIN
+    IF length(v_cnpj) <> 14
+       OR v_cnpj !~ '^[A-Z0-9]{12}[0-9]{2}$' THEN
+        RETURN false;
+    END IF;
+    IF length(replace(v_cnpj, substr(v_cnpj, 1, 1), '')) = 0 THEN
+        RETURN false;
+    END IF;
+
+    v_soma := 0;
+    FOR v_i IN 1..12 LOOP
+        v_soma := v_soma
+            + (ascii(substr(v_cnpj, v_i, 1)) - 48) * v_pesos_1[v_i];
+    END LOOP;
+    v_resto := v_soma % 11;
+    v_digito := CASE WHEN v_resto < 2 THEN 0 ELSE 11 - v_resto END;
+    IF substr(v_cnpj, 13, 1)::integer <> v_digito THEN
+        RETURN false;
+    END IF;
+
+    v_soma := 0;
+    FOR v_i IN 1..13 LOOP
+        v_soma := v_soma
+            + (ascii(substr(v_cnpj, v_i, 1)) - 48) * v_pesos_2[v_i];
+    END LOOP;
+    v_resto := v_soma % 11;
+    v_digito := CASE WHEN v_resto < 2 THEN 0 ELSE 11 - v_resto END;
+
+    RETURN substr(v_cnpj, 14, 1)::integer = v_digito;
+END;
+$$;
+
 CREATE TABLE cliente (
     id                   bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     razao_social         varchar(150)   NOT NULL,
@@ -81,7 +128,7 @@ CREATE TABLE cliente (
     CONSTRAINT fk_cliente_usuario
         FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE SET NULL,
     CONSTRAINT uq_cliente_cnpj UNIQUE (cnpj),
-    CONSTRAINT ck_cliente_cnpj CHECK (cnpj ~ '^[0-9]{14}$'),
+    CONSTRAINT ck_cliente_cnpj CHECK (cnpj IS NULL OR fn_cnpj_valido(cnpj)),
     CONSTRAINT ck_cliente_razao_social CHECK (length(btrim(razao_social)) >= 2),
     CONSTRAINT ck_cliente_valor CHECK (valor_mensal IS NULL OR valor_mensal >= 0),
     CONSTRAINT ck_cliente_cancelamento
@@ -94,7 +141,7 @@ CREATE INDEX ix_cliente_status   ON cliente (status);
 CREATE INDEX ix_cliente_segmento ON cliente (segmento);
 
 COMMENT ON TABLE  cliente        IS 'Empresa SaaS B2B cliente. RF01, UC01.';
-COMMENT ON COLUMN cliente.cnpj   IS 'Somente digitos; mascara e responsabilidade da interface.';
+COMMENT ON COLUMN cliente.cnpj   IS 'CNPJ com digitos verificadores validos; mascara e responsabilidade da interface.';
 COMMENT ON COLUMN cliente.status IS 'RN: recontratacao reativa o cadastro existente, nao cria outro.';
 
 -- =====================================================================

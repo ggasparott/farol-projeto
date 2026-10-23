@@ -5,7 +5,6 @@ import Aviso from '../components/Aviso'
 import { supabase } from '../lib/supabase'
 import type { Importacao, ImportacaoErro } from '../types'
 
-// Clientes primeiro: os demais tipos referenciam o cliente pelo CNPJ.
 const TIPOS = {
   CLIENTE: { rotulo: 'Clientes', colunas: ['razao_social', 'cnpj', 'segmento', 'plano', 'valor_mensal', 'data_inicio_contrato'] },
   USO: { rotulo: 'Uso mensal', colunas: ['cnpj', 'competencia', 'qtd_acessos', 'minutos_uso', 'qtd_usuarios_ativos'] },
@@ -13,6 +12,8 @@ const TIPOS = {
   NPS: { rotulo: 'NPS', colunas: ['cnpj', 'nota', 'comentario', 'data_coleta'] },
 } as const
 type Tipo = keyof typeof TIPOS
+type Arquivos = Record<Tipo, File | null>
+type ResumoLote = { tipo: Tipo; lote: Importacao; erros: ImportacaoErro[] }
 
 function mensagemLegivel(mensagem: string): string {
   if (/^(O arquivo|O CSV|Os dados|Não foi possível|Há |A criticidade|O status|O CNPJ|A razão|O valor|Acessos|A nota|A primeira|O fechamento|Esta linha|Falta)/.test(mensagem)) {
@@ -23,7 +24,9 @@ function mensagemLegivel(mensagem: string): string {
   if (clienteNaoEncontrado) {
     return `O CNPJ ${clienteNaoEncontrado[1]} não está cadastrado. Importe os clientes antes deste arquivo.`
   }
-
+  if (/cnpj invalido|ck_cliente_cnpj|cnpj.*check constraint/i.test(mensagem)) {
+    return 'O CNPJ é inválido. Confira os 12 caracteres e os 2 dígitos verificadores.'
+  }
   if (/colunas ausentes no arquivo:/i.test(mensagem)) {
     const colunas = mensagem.split(':').slice(1).join(':').trim()
     return `O arquivo está sem as seguintes colunas obrigatórias: ${colunas}. Confira o cabeçalho do CSV.`
@@ -42,9 +45,6 @@ function mensagemLegivel(mensagem: string): string {
   }
   if (/invalid input value for enum status_atendimento/i.test(mensagem)) {
     return 'O status do atendimento é inválido. Use ABERTO, EM_ANDAMENTO, RESOLVIDO ou CANCELADO.'
-  }
-  if (/ck_cliente_cnpj|cnpj.*check constraint/i.test(mensagem)) {
-    return 'O CNPJ deve conter exatamente 14 números, sem pontuação.'
   }
   if (/ck_cliente_razao_social/i.test(mensagem)) {
     return 'A razão social deve ter pelo menos 2 caracteres.'
@@ -80,46 +80,94 @@ function mensagemLegivel(mensagem: string): string {
   return 'Não foi possível validar esta linha. Confira os valores e o formato das colunas.'
 }
 
+async function lerCsv(tipo: Tipo, arquivo: File): Promise<Record<string, string>[]> {
+  const { data, errors, meta } = await new Promise<Papa.ParseResult<Record<string, string>>>((resolve, reject) =>
+    Papa.parse<Record<string, string>>(arquivo, {
+      header: true,
+      skipEmptyLines: true,
+      complete: resolve,
+      error: reject,
+    }),
+  )
+  if (errors.length > 0) {
+    throw new Error(`O CSV de ${TIPOS[tipo].rotulo.toLowerCase()} tem linhas com formato irregular. Confira os separadores e as colunas.`)
+  }
+
+  const faltando = TIPOS[tipo].colunas.filter((coluna) => !meta.fields?.includes(coluna))
+  if (faltando.length > 0) {
+    throw new Error(`O arquivo de ${TIPOS[tipo].rotulo.toLowerCase()} está sem as colunas obrigatórias: ${faltando.join(', ')}.`)
+  }
+  if (data.length === 0) {
+    throw new Error(`O arquivo de ${TIPOS[tipo].rotulo.toLowerCase()} não contém linhas.`)
+  }
+  return data
+}
+
+function baixarModelo(tipo: Tipo) {
+  const csv = Papa.unparse([TIPOS[tipo].colunas])
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `modelo_${tipo.toLowerCase()}.csv`
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
 export default function Importar() {
-  const [tipo, setTipo] = useState<Tipo>('CLIENTE')
-  const COLUNAS: readonly string[] = TIPOS[tipo].colunas
-  const [arquivo, setArquivo] = useState<File | null>(null)
+  const [arquivos, setArquivos] = useState<Arquivos>({
+    CLIENTE: null,
+    USO: null,
+    ATENDIMENTO: null,
+    NPS: null,
+  })
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
-  const [resumo, setResumo] = useState<{ lote: Importacao; erros: ImportacaoErro[] } | null>(null)
+  const [resumos, setResumos] = useState<ResumoLote[]>([])
 
   async function importar() {
-    if (!arquivo) return
+    const selecionados = (Object.keys(TIPOS) as Tipo[])
+      .flatMap((tipo) => {
+        const arquivo = arquivos[tipo]
+        return arquivo ? [{ tipo, arquivo }] : []
+      })
+    if (selecionados.length === 0) return
+
     setErro(null)
-    setResumo(null)
+    setResumos([])
     setEnviando(true)
     try {
-      const { data, errors: errosCsv, meta } = await new Promise<Papa.ParseResult<Record<string, string>>>((ok, falha) =>
-        Papa.parse<Record<string, string>>(arquivo, { header: true, skipEmptyLines: true, complete: ok, error: falha }),
-      )
-      if (errosCsv.length > 0) {
-        throw new Error('O CSV tem linhas com formato irregular. Confira os separadores e se todas as linhas têm as mesmas colunas.')
+      const importacoes: Record<string, { arquivo: string; linhas: Record<string, string>[] }> = {}
+      for (const { tipo, arquivo } of selecionados) {
+        importacoes[tipo] = { arquivo: arquivo.name, linhas: await lerCsv(tipo, arquivo) }
       }
-      // UC02/E1: formato invalido -> nada e gravado.
-      const faltando = COLUNAS.filter((c) => !meta.fields?.includes(c))
-      if (faltando.length > 0) throw new Error(`Colunas ausentes no arquivo: ${faltando.join(', ')}`)
-      if (data.length === 0) throw new Error('O arquivo não contém linhas.')
 
-      const { data: id, error } = tipo === 'CLIENTE'
-        ? await supabase.rpc('fn_importar_lote', { p_origem: 'ARQUIVO_CSV', p_arquivo: arquivo.name, p_linhas: data })
-        : await supabase.rpc('fn_importar_dados', { p_tipo: tipo, p_arquivo: arquivo.name, p_linhas: data })
+      const { data, error } = await supabase.rpc('fn_importar_conjunto', { p_importacoes: importacoes })
       if (error) throw new Error(mensagemLegivel(error.message))
+      if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        throw new Error('A resposta da importação foi inválida. Nenhum resumo pôde ser carregado.')
+      }
 
-      // Classificacao por IA (OpenAI) via Edge Function; ela cai nas regras se a IA falhar.
+      const ids = data as Record<string, unknown>
       const { error: erroCalculo } = await supabase.functions.invoke('classificar-risco')
-      if (erroCalculo) throw new Error('Os dados foram importados, mas não foi possível atualizar a classificação de risco. Tente novamente mais tarde.')
+      const novosResumos = await Promise.all(selecionados.map(async ({ tipo }) => {
+        const id = ids[tipo]
+        if (typeof id !== 'number') {
+          throw new Error(`A importação de ${TIPOS[tipo].rotulo.toLowerCase()} não retornou um identificador válido.`)
+        }
+        const [lote, erros] = await Promise.all([
+          supabase.from('importacao').select('*').eq('id', id).single(),
+          supabase.from('importacao_erro').select('numero_linha, mensagem').eq('importacao_id', id).order('numero_linha'),
+        ])
+        if (lote.error || erros.error) {
+          throw new Error('Os dados foram importados, mas não foi possível carregar o resumo de todos os arquivos.')
+        }
+        return { tipo, lote: lote.data as Importacao, erros: (erros.data as ImportacaoErro[]) ?? [] }
+      }))
 
-      const [lote, erros] = await Promise.all([
-        supabase.from('importacao').select('*').eq('id', id).single(),
-        supabase.from('importacao_erro').select('numero_linha, mensagem').eq('importacao_id', id).order('numero_linha'),
-      ])
-      if (lote.error) throw new Error('Os dados foram importados, mas não foi possível carregar o resumo da importação.')
-      setResumo({ lote: lote.data as Importacao, erros: (erros.data as ImportacaoErro[]) ?? [] })
+      setResumos(novosResumos)
+      if (erroCalculo) {
+        setErro('Os dados foram importados, mas não foi possível atualizar a classificação de risco. Tente novamente mais tarde.')
+      }
     } catch (e) {
       setErro(mensagemLegivel(e instanceof Error ? e.message : ''))
     } finally {
@@ -127,59 +175,83 @@ export default function Importar() {
     }
   }
 
+  const temArquivo = Object.values(arquivos).some(Boolean)
+
   return (
     <>
       <p className="rotulo">UC02 · Importação</p>
       <h1 className="mb-6 text-2xl font-bold uppercase">Importar dados de clientes</h1>
 
-      <div className="max-w-2xl border border-linha bg-white p-5">
-        <select
-          value={tipo}
-          onChange={(e) => { setTipo(e.target.value as Tipo); setResumo(null); setErro(null) }}
-          className="mb-3 block border border-linha px-2 py-1 text-sm"
-        >
-          {(Object.keys(TIPOS) as Tipo[]).map((t) => <option key={t} value={t}>{TIPOS[t].rotulo}</option>)}
-        </select>
-        <p className="mb-3 text-sm text-suave">
-          Selecione um arquivo CSV com as colunas: <code className="text-xs">{COLUNAS.join(', ')}</code>.
+      <div className="max-w-3xl border border-linha bg-white p-5">
+        <p className="mb-4 text-sm text-suave">
+          Selecione um ou mais arquivos CSV. Todos serão validados e enviados em conjunto; clientes são processados antes dos demais dados.
+          O CNPJ é validado, incluindo os dígitos verificadores.
         </p>
-        <input
-          type="file"
-          accept=".csv,text/csv"
-          onChange={(e) => { setArquivo(e.target.files?.[0] ?? null); setResumo(null); setErro(null) }}
-          className="mb-4 block w-full text-sm"
-        />
+        <div className="space-y-4">
+          {(Object.keys(TIPOS) as Tipo[]).map((tipo) => (
+            <div key={tipo} className="border-b border-linha pb-4 last:border-0 last:pb-0">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <label htmlFor={`arquivo-${tipo}`} className="text-sm font-bold">{TIPOS[tipo].rotulo}</label>
+                <button
+                  type="button"
+                  onClick={() => baixarModelo(tipo)}
+                  className="text-xs font-bold uppercase tracking-wider text-aco underline"
+                >
+                  Baixar modelo CSV
+                </button>
+              </div>
+              <p className="mb-2 text-xs text-suave">
+                Colunas: <code>{TIPOS[tipo].colunas.join(', ')}</code>
+              </p>
+              <input
+                id={`arquivo-${tipo}`}
+                type="file"
+                accept=".csv,text/csv"
+                disabled={enviando}
+                onChange={(e) => {
+                  const arquivo = e.target.files?.[0] ?? null
+                  setArquivos((atuais) => ({ ...atuais, [tipo]: arquivo }))
+                  setResumos([])
+                  setErro(null)
+                }}
+                className="block w-full text-sm"
+              />
+            </div>
+          ))}
+        </div>
         <button
           onClick={importar}
-          disabled={!arquivo || enviando}
-          className="bg-aco px-4 py-2 text-xs font-bold uppercase tracking-widest text-white hover:bg-marinho disabled:bg-linha disabled:text-suave"
+          disabled={!temArquivo || enviando}
+          className="mt-5 bg-aco px-4 py-2 text-xs font-bold uppercase tracking-widest text-white hover:bg-marinho disabled:bg-linha disabled:text-suave"
         >
-          {enviando ? 'Importando…' : 'Importar'}
+          {enviando ? 'Validando e importando…' : 'Importar arquivos selecionados'}
         </button>
       </div>
 
-      <div className="mt-6 max-w-2xl space-y-4">
+      <div className="mt-6 max-w-3xl space-y-4">
         {erro && <Aviso tipo="erro">{erro}</Aviso>}
-        {resumo && (
-          <>
+        {resumos.map(({ tipo, lote, erros }) => (
+          <section key={lote.id} className="space-y-3">
             <div className="border border-linha bg-white p-5">
-              <p className="rotulo mb-2">Resumo da importação · {resumo.lote.status}</p>
+              <p className="rotulo mb-2">Resumo · {TIPOS[tipo].rotulo} · {lote.status}</p>
               <p className="text-sm tabular-nums">
-                {resumo.lote.total_linhas} linhas · <b>{resumo.lote.total_gravados}</b> gravadas ·{' '}
-                <b>{resumo.lote.total_rejeitados}</b> rejeitadas
+                {lote.total_linhas} linhas · <b>{lote.total_gravados}</b> gravadas ·{' '}
+                <b>{lote.total_rejeitados}</b> rejeitadas
               </p>
               <Link to="/" className="mt-3 inline-block text-xs font-bold uppercase tracking-wider text-aco underline">Ir ao painel</Link>
             </div>
-            {resumo.erros.length > 0 && (
+            {erros.length > 0 && (
               <div className="border border-linha bg-white p-5">
-                <p className="rotulo mb-2">Inconsistências</p>
+                <p className="rotulo mb-2">Inconsistências · {TIPOS[tipo].rotulo}</p>
                 <ul className="space-y-1 text-sm">
-                  {resumo.erros.map((r) => <li key={r.numero_linha}>Linha {r.numero_linha}: {mensagemLegivel(r.mensagem)}</li>)}
+                  {erros.map((r) => (
+                    <li key={r.numero_linha}>Linha {r.numero_linha}: {mensagemLegivel(r.mensagem)}</li>
+                  ))}
                 </ul>
               </div>
             )}
-          </>
-        )}
+          </section>
+        ))}
       </div>
     </>
   )

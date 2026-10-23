@@ -52,6 +52,8 @@ Ficam para depois: UC01 (cadastro manual) e um agente de IA mais completo. A pri
 2. No SQL Editor, execute em ordem: `db/01_schema.sql`, `02_procedures.sql`, `03_rpc.sql`, `04_score_provisorio.sql`, `05_importar_complementos.sql`, `06_rls.sql` e `07_rpc_definer.sql`.
 3. **Sempre que rodar de novo o 02–05, rode o 07 em seguida:** `CREATE OR REPLACE` desfaz o `SECURITY DEFINER` das funções.
 
+Para um banco já existente, execute `db/08_validar_cnpj.sql` e depois reaplique `db/02_procedures.sql`, `db/05_importar_complementos.sql` e `db/07_rpc_definer.sql`. A migração interrompe com uma mensagem explícita caso já existam CNPJs inválidos; corrija esses registros antes de tentar novamente.
+
 ### 2. Edge Function de classificação (IA)
 ```bash
 supabase secrets set OPENAI_API_KEY=sk-...        # opcional: OPENAI_MODEL=<modelo>
@@ -60,7 +62,7 @@ supabase functions deploy classificar-risco
 A função processa os clientes pendentes (`fn_clientes_para_atualizar`), pede à OpenAI a **intensidade (0–1) de cada fator** e grava `score = soma(peso × intensidade)`. Se a OpenAI falhar, cai no cálculo por regras (`04_score_provisorio.sql`).
 
 ### 3. Dados de teste
-Em `db/seeds/` há 4 CSVs (50 clientes, uso, atendimentos e NPS). Na tela **Importar**, importe nesta ordem: Clientes → Uso → Atendimentos → NPS. A cada importação a classificação é disparada.
+Em `db/seeds/` há 4 CSVs (50 clientes, uso, atendimentos e NPS). Na tela **Importar**, selecione os arquivos desejados e envie em uma única operação. Clientes são processados primeiro, cada tipo mantém sua validação e a classificação é disparada uma vez ao final. A tela também oferece um modelo CSV para cada tipo; CNPJs inválidos, inclusive com dígitos verificadores incorretos, são rejeitados por linha.
 
 ### 4. Frontend
 ```bash

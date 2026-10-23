@@ -19,7 +19,8 @@ BEGIN
           FROM pg_proc p
           JOIN pg_namespace n ON n.oid = p.pronamespace
          WHERE n.nspname = 'public'
-           AND p.proname IN ('fn_importar_lote', 'fn_importar_dados', 'fn_calcular_risco_cliente',
+           AND p.proname IN ('fn_importar_lote', 'fn_importar_dados', 'fn_importar_conjunto',
+                             'fn_calcular_risco_cliente',
                              'fn_calcular_score_provisorio', 'fn_recalcular_analises',
                              'fn_clientes_para_atualizar')
     LOOP

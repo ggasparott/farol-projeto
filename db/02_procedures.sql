@@ -54,6 +54,10 @@ BEGIN
         v_numero_linha := v_numero_linha + 1;
 
         BEGIN
+            IF NOT COALESCE(fn_cnpj_valido(v_linha->>'cnpj'), false) THEN
+                RAISE EXCEPTION 'CNPJ invalido';
+            END IF;
+
             -- UC02/A1: cliente existente (mesmo CNPJ) e atualizado, nao duplicado.
             INSERT INTO cliente (
                 razao_social, cnpj, segmento, plano,
@@ -61,7 +65,7 @@ BEGIN
             )
             VALUES (
                 v_linha->>'razao_social',
-                v_linha->>'cnpj',
+                upper(regexp_replace(v_linha->>'cnpj', '[^0-9A-Za-z]', '', 'g')),
                 v_linha->>'segmento',
                 v_linha->>'plano',
                 NULLIF(v_linha->>'valor_mensal', '')::numeric,
