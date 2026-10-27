@@ -1,28 +1,13 @@
 @import "tailwindcss";
-
-@theme {
-  --color-fundo: #f2f2f2;
-  --color-marinho: #1f2d3d;
-  --color-aco: #3d6189;
-  --color-aco-claro: #e8eff6;
-  --color-texto: #1f1f1f;
-  --color-suave: #555555;
-  --color-linha: #d4d4d4;
-  --color-risco-alto: #b3261e;
-  --color-risco-medio: #b26a00;
-  --color-risco-baixo: #2e7d4f;
-}
-
-body {
-  background: var(--color-fundo);
-  color: var(--color-texto);
-  font-family: "DejaVu Sans", "Segoe UI", system-ui, sans-serif;
-}
-
-.rotulo {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--color-aco);
-}
+@theme { --color-fundo: #f4f6f7; --color-petroleo: #0f3b45; --color-petroleo-medio: #2c6e7c; --color-petroleo-claro: #e3eef0; --color-marinho: #0b3038; --color-aco: #175c6c; --color-aco-claro: #e3eef0; --color-texto: #16232a; --color-suave: #586971; --color-linha: #dce3e6; --color-risco-alto: #b9432d; --color-risco-medio: #9a6800; --color-risco-baixo: #287a55; }
+* { box-sizing: border-box; }
+html { color-scheme: light; }
+body { margin: 0; min-width: 320px; background: var(--color-fundo); color: var(--color-texto); font-family: Inter, "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; }
+button, a { transition: color .15s, background-color .15s, border-color .15s, opacity .15s; }
+button { cursor: pointer; } button:disabled { cursor: not-allowed; }
+.rotulo { font-size: .7rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--color-aco); }
+.card { border: 1px solid var(--color-linha); border-radius: 1rem; background: #fff; box-shadow: 0 1px 2px rgb(15 59 69 / .03); }
+input, select, textarea { border-radius: .65rem; }
+table { border-collapse: separate; border-spacing: 0; }
+:focus-visible { outline: 3px solid rgb(44 110 124 / .25); outline-offset: 2px; }
