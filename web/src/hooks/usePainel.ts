@@ -7,6 +7,7 @@ export function usePainel(filtro: NivelRisco | 'TODOS') {
   const [linhas, setLinhas] = useState<LinhaPainel[]>([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
+  const [revisao, setRevisao] = useState(0)
 
   useEffect(() => {
     let ativo = true
@@ -26,7 +27,7 @@ export function usePainel(filtro: NivelRisco | 'TODOS') {
       setCarregando(false)
     })
     return () => { ativo = false }
-  }, [filtro])
+  }, [filtro, revisao])
 
-  return { linhas, carregando, erro }
+  return { linhas, carregando, erro, recarregar: () => setRevisao((valor) => valor + 1) }
 }
