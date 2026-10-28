@@ -70,10 +70,16 @@ Deno.serve(async (req) => {
   if (error) return Response.json({ erro: error.message }, { status: 400, headers: cors })
 
   const ids: number[] = pend.slice(0, LOTE_MAX).map((p: { cliente_id: number }) => p.cliente_id)
-  let ia = 0, regras = 0
+  let ia = 0, regras = 0, mudaramNivel = 0
   console.log(`pendentes: ${pend.length}, processando ${ids.length}, modelo ${MODELO}, chave OpenAI ${Deno.env.get('OPENAI_API_KEY') ? 'definida' : 'AUSENTE'}`)
 
   const processar = async (id: number) => {
+    const { data: anterior } = await db
+      .from('analise_risco')
+      .select('nivel_risco')
+      .eq('cliente_id', id)
+      .eq('vigente', true)
+      .maybeSingle()
     try {
       const [cli, uso, aten, nps] = await Promise.all([
         db.from('cliente').select('segmento, plano, valor_mensal, data_inicio_contrato').eq('id', id).single(),
@@ -98,6 +104,14 @@ Deno.serve(async (req) => {
       if (ef) console.error(`cliente ${id}: fallback falhou:`, ef.message)
       regras++
     }
+
+    const { data: atual } = await db
+      .from('analise_risco')
+      .select('nivel_risco')
+      .eq('cliente_id', id)
+      .eq('vigente', true)
+      .maybeSingle()
+    if (anterior && atual && anterior.nivel_risco !== atual.nivel_risco) mudaramNivel++
   }
 
   // Em lotes de CONCORRENCIA clientes por vez: ~48 clientes em poucos segundos.
@@ -105,5 +119,11 @@ Deno.serve(async (req) => {
     await Promise.all(ids.slice(i, i + CONCORRENCIA).map(processar))
   }
 
-  return Response.json({ processados: ids.length, ia, regras, restantes: pend.length - ids.length }, { headers: cors })
+  return Response.json({
+    processados: ids.length,
+    mudaram_nivel: mudaramNivel,
+    ia,
+    regras,
+    restantes: pend.length - ids.length,
+  }, { headers: cors })
 })
