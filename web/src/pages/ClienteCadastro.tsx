@@ -54,8 +54,18 @@ export default function ClienteCadastro() {
 
   return (
     <>
-      <p className="rotulo">UC01 · Cadastro de cliente</p>
-      <h1 className="mb-6 text-2xl font-bold uppercase">Cadastrar cliente</h1>
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="rotulo">UC01 · Cadastro de cliente</p>
+          <h1 className="text-2xl font-bold uppercase">Cadastrar cliente</h1>
+        </div>
+        <Link
+          to="/importar"
+          className="border border-aco px-4 py-2 text-xs font-bold uppercase tracking-wider text-aco hover:bg-petroleo-claro"
+        >
+          Importar clientes por CSV
+        </Link>
+      </header>
 
       <form onSubmit={cadastrar} className="max-w-3xl space-y-5 border border-linha bg-white p-5">
         {erro && <Aviso tipo="erro">{erro}</Aviso>}

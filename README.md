@@ -12,7 +12,7 @@ Fluxo principal: **dados dos clientes → cálculo do risco → classificação 
 | Banco / Auth / backend | Supabase (PostgreSQL 14+) |
 | Classificação de risco por IA | Edge Function do Supabase (`supabase/functions/classificar-risco`) chamando a OpenAI (`gpt-4o-mini` por padrão) |
 
-O frontend fala direto com o Supabase (`supabase-js`): leituras via tabelas/views, escritas via `rpc()` nas stored procedures. Não há API própria: a classificação de risco roda numa Edge Function, chamada pelo frontend após cada importação.
+O frontend fala direto com o Supabase (`supabase-js`): leituras via tabelas/views e escritas via `rpc()` nas stored procedures. Não há API própria: a classificação roda numa Edge Function, chamada pelo frontend ao concluir uma operação de importação.
 
 ## Estrutura de pastas
 
@@ -22,6 +22,7 @@ farol-projeto/
 │   ├── 01_schema.sql      # Tipos, tabelas, constraints, triggers e catálogos
 │   ├── 02_procedures.sql  # sp_importar_lote, sp_calcular_risco_cliente, fn_clientes_para_atualizar
 │   ├── 03–07              # RPCs, score por regras, importação de uso/atend./NPS, RLS, SECURITY DEFINER
+│   ├── 08–09              # Validação de CNPJ e isolamento de dados por conta
 │   └── seeds/             # 4 CSVs sintéticos (50 clientes, uso, atendimentos, NPS)
 ├── web/                   # Frontend React + TS + Tailwind
 │   ├── public/
@@ -45,16 +46,18 @@ Casos de uso priorizados: **UC01** cadastrar cliente, **UC02** importar dados, *
 
 Ficam para depois a origem por API simulada e um agente de IA mais completo. A priorização (UC11) sai da ordenação do painel.
 
-O recorte completo, os itens adiados e o roteiro de demonstração estão em [`docs/ESCOPO_ALPHA.md`](docs/ESCOPO_ALPHA.md). O resultado dos testes TA03–TA14 deve ser registrado em [`docs/CHECKLIST_ALPHA.md`](docs/CHECKLIST_ALPHA.md).
+O recorte completo, os itens adiados e o roteiro de demonstração estão em [`docs/ESCOPO_ALPHA.md`](docs/ESCOPO_ALPHA.md). Registre o resultado dos testes TA01–TA15 em [`docs/CHECKLIST_ALPHA.md`](docs/CHECKLIST_ALPHA.md).
 
 ## Como rodar
 
 ### 1. Banco de dados
 1. Crie um projeto no Supabase.
-2. No SQL Editor, execute em ordem: `db/01_schema.sql`, `02_procedures.sql`, `03_rpc.sql`, `04_score_provisorio.sql`, `05_importar_complementos.sql`, `06_rls.sql` e `07_rpc_definer.sql`.
+2. No SQL Editor, execute em ordem: `db/01_schema.sql`, `02_procedures.sql`, `03_rpc.sql`, `04_score_provisorio.sql`, `05_importar_complementos.sql`, `06_rls.sql`, `07_rpc_definer.sql` e `09_isolamento_contas.sql`.
 3. **Sempre que rodar de novo o 02–05, rode o 07 em seguida:** `CREATE OR REPLACE` desfaz o `SECURITY DEFINER` das funções.
 
 Para um banco já existente, execute `db/08_validar_cnpj.sql` e depois reaplique `db/02_procedures.sql`, `db/05_importar_complementos.sql` e `db/07_rpc_definer.sql`. A migração interrompe com uma mensagem explícita caso já existam CNPJs inválidos; corrija esses registros antes de tentar novamente.
+
+Em banco já existente, execute `db/09_isolamento_contas.sql` para restringir clientes e dados relacionados ao `usuario_id` da conta autenticada. Registros antigos sem proprietário ficam ocultos; antes de atribuí-los, confirme quem é o dono correto. Depois, publique novamente a Edge Function `classificar-risco`.
 
 ### 2. Edge Function de classificação (IA)
 ```bash
@@ -64,7 +67,7 @@ supabase functions deploy classificar-risco
 A função processa os clientes pendentes (`fn_clientes_para_atualizar`), pede à OpenAI a **intensidade (0–1) de cada fator** e grava `score = soma(peso × intensidade)`. Se a OpenAI falhar, cai no cálculo por regras (`04_score_provisorio.sql`).
 
 ### 3. Dados de teste
-Em `db/seeds/` há 4 CSVs (50 clientes, uso, atendimentos e NPS). Na tela **Importar**, selecione os arquivos desejados e envie em uma única operação. Clientes são processados primeiro, cada tipo mantém sua validação e a classificação é disparada uma vez ao final. A tela também oferece um modelo CSV para cada tipo; CNPJs inválidos, inclusive com dígitos verificadores incorretos, são rejeitados por linha.
+Em `db/seeds/` há 4 CSVs (50 clientes, uso, atendimentos e NPS). Na tela **Importar**, selecione os arquivos desejados e envie com um clique. Cada arquivo é processado em uma chamada separada, os clientes são enviados primeiro e a classificação é disparada uma vez ao final. A tela também oferece um modelo CSV para cada tipo; CNPJs inválidos, inclusive com dígitos verificadores incorretos, são rejeitados por linha.
 
 ### 4. Frontend
 ```bash
@@ -79,14 +82,13 @@ npm run dev
 ## Pendências conhecidas
 
 - **Qualidade da IA:** o `gpt-4o-mini` erra contas (queda percentual, janela de 90 dias) e omite fatores. Plano: calcular as intensidades no código e deixar a IA só para ajuste limitado e justificativa. A distribuição de níveis também sai torta (poucos MÉDIO); revisar réguas/limiares do `modelo_ia`.
-- RLS do MVP é simples: qualquer usuário logado acessa tudo. Sem isolamento por empresa/equipe.
-- A importação roda ~18 s após a classificação (8 clientes em paralelo, até 50 por chamada); acima disso, importar de novo.
-- O banco real tem ajustes feitos pelo dashboard (ex.: `fn_importar_lote` com `p_usuario_id`) que ainda não estão em `db/`.
-- Sem testes automatizados; testes de aceitação TA01–TA14 do recorte Alpha ainda não executados.
+- Cada conta autenticada acessa apenas os próprios clientes e dados relacionados; contas não compartilham clientes.
+- A Edge Function processa até 50 clientes pendentes por execução, com até 8 em paralelo. Confira o resumo e execute a atualização novamente se ainda houver clientes pendentes.
+- Sem testes automatizados; os resultados dos testes de aceitação TA01–TA15 devem ser registrados em [`docs/CHECKLIST_ALPHA.md`](docs/CHECKLIST_ALPHA.md).
 
 ## Documentação
 
-Tudo em [docs/requisitos/](docs/requisitos/): casos de uso e testes de aceitação TA01–TA14, diagramas de classe, estado e sequência, TAP e manual do projeto.
+Casos de uso, diagramas, TAP e manual do projeto estão em [docs/requisitos/](docs/requisitos/); escopo e checklist de aceite estão em [`docs/ESCOPO_ALPHA.md`](docs/ESCOPO_ALPHA.md) e [`docs/CHECKLIST_ALPHA.md`](docs/CHECKLIST_ALPHA.md).
 
 O passo a passo de publicação e CI/CD está em [docs/DEPLOY_FIREBASE.md](docs/DEPLOY_FIREBASE.md). O workflow valida pull requests, cria previews temporários e publica automaticamente a branch `main` no Firebase Hosting.
 

@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
 
   const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
 
-  const { data: pend, error } = await db.rpc('fn_clientes_para_atualizar')
+  const { data: pend, error } = await auth.rpc('fn_clientes_para_atualizar')
   if (error) return Response.json({ erro: error.message }, { status: 400, headers: cors })
 
   const ids: number[] = pend.slice(0, LOTE_MAX).map((p: { cliente_id: number }) => p.cliente_id)

@@ -7,9 +7,9 @@ export interface Nps {
 
 export interface LinhaPainel {
   id: number
-  score: number
+  score: number | null
   nivel_risco: NivelRisco
-  executada_em: string
+  executada_em: string | null
   cliente: {
     id: number
     razao_social: string

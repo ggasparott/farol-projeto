@@ -61,7 +61,24 @@ export default function ClienteDetalhe() {
     <section className="card mb-4 overflow-hidden">
       <div className="grid lg:grid-cols-[1fr_360px]">
         <div className="p-5 sm:p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="rotulo mb-2">Detalhes do cliente</p><h1 className="max-w-4xl text-3xl font-extrabold tracking-[-.03em] sm:text-4xl">{cliente.razao_social}</h1><p className="mt-2 text-suave">{cliente.cnpj || 'CNPJ não informado'}</p></div><span className="rounded-full bg-petroleo-claro px-3 py-1.5 text-xs font-bold text-aco">{cliente.status}</span></div>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="rotulo mb-2">Detalhes do cliente</p>
+              <h1 className="max-w-4xl text-3xl font-extrabold tracking-[-.03em] sm:text-4xl">{cliente.razao_social}</h1>
+              <p className="mt-2 text-suave">{cliente.cnpj || 'CNPJ não informado'}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="rounded-full bg-petroleo-claro px-3 py-1.5 text-xs font-bold text-aco">{cliente.status}</span>
+              {cliente.cnpj && (
+                <Link
+                  to={`/importar?clienteId=${cliente.id}`}
+                  className="rounded-lg bg-aco px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-marinho"
+                >
+                  Importar dados deste cliente
+                </Link>
+              )}
+            </div>
+          </div>
           <dl className="mt-6 grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-4"><Info rotulo="Segmento" valor={cliente.segmento}/><Info rotulo="Plano" valor={cliente.plano}/><Info rotulo="Cliente desde" valor={fmtData(cliente.data_inicio_contrato)}/><Info rotulo="Valor mensal" valor={cliente.valor_mensal === null ? 'Não informado' : moeda.format(cliente.valor_mensal)}/></dl>
         </div>
         <div className="border-t border-linha bg-petroleo-claro/35 p-5 sm:p-6 lg:border-l lg:border-t-0">

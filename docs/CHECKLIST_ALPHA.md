@@ -18,13 +18,15 @@ Preencher `Resultado` com `Aprovado`, `Reprovado` ou `Não executado` e registra
 | TA12 | Mostrar ao menos uma sugestão coerente para risco médio ou alto | Alta | Não executado | |
 | TA13 | Recalcular após novos dados e atualizar data e hora | Alta | Não executado | |
 | TA14 | Usuário percorre painel, detalhe e sugestão sem ajuda | Alta | Não executado | |
+| TA15 | Importar dados CSV diretamente para um cliente cadastrado manualmente | Alta | Não executado | |
 
 ## Verificações técnicas
 
 | Verificação | Resultado |
 | --- | --- |
-| `npm run build` | Aprovado em 27/10/2026 |
-| `npm run lint` | Aprovado em 27/10/2026 |
+| `npm run build` | Aprovado em 28/10/2026; aviso não bloqueante de bundle JavaScript acima de 500 kB |
+| `npm run lint` | Aprovado em 28/10/2026 |
+| Seeds CSV: estrutura, CNPJs, referências, faixas numéricas e cronologia de atendimentos | Aprovado em 28/10/2026 |
 | Scripts versionados comparados com o banco atual | Não executado |
 | Edge Function implantada e autenticada | Não executado |
 | Fluxo completo executado no ambiente Alpha | Não executado |
