@@ -7,6 +7,7 @@ import ClienteDetalhe from './pages/ClienteDetalhe'
 import Importar from './pages/Importar'
 import Login from './pages/Login'
 import Cadastro from './pages/Cadastro'
+import ClienteCadastro from './pages/ClienteCadastro'
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               <Route path="/" element={<Painel />} />
+              <Route path="/clientes/novo" element={<ClienteCadastro />} />
               <Route path="/clientes/:id" element={<ClienteDetalhe />} />
               <Route path="/importar" element={<Importar />} />
             </Route>
