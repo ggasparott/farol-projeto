@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Aviso from '../components/Aviso'
 import { useAuth } from '../contexts/AuthContext'
+import { cnpjValido } from '../lib/cnpj'
 import { supabase } from '../lib/supabase'
 
 function mensagemCadastro(mensagem: string) {
@@ -25,10 +26,15 @@ export default function ClienteCadastro() {
 
   async function cadastrar(e: React.FormEvent) {
     e.preventDefault()
-    setSalvando(true)
     setErro(null)
 
     const cnpjNormalizado = cnpj.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+    if (!cnpjValido(cnpjNormalizado)) {
+      setErro('Informe um CNPJ válido, com os dígitos verificadores corretos.')
+      return
+    }
+
+    setSalvando(true)
     const { data, error } = await supabase
       .from('cliente')
       .insert({

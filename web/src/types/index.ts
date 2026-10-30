@@ -14,6 +14,7 @@ export interface LinhaPainel {
     id: number
     razao_social: string
     segmento: string
+    problemas_cadastro: string[]
     avaliacao_nps: Nps[]
   }
 }

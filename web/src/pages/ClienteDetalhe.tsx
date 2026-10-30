@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import Aviso from '../components/Aviso'
 import RiscoBadge from '../components/RiscoBadge'
 import { useCliente } from '../hooks/useCliente'
+import { cnpjValido } from '../lib/cnpj'
 import { supabase } from '../lib/supabase'
 import type { AcaoAplicada } from '../types'
+import { validarDadosBasicos } from '../lib/validacaoCliente'
 import { fmtData, fmtDataHora, ORDEM, pct } from '../lib/risco'
 
 function Card({ titulo, descricao, children, className = '' }: { titulo: string; descricao?: string; children: ReactNode; className?: string }) {
@@ -19,20 +21,50 @@ function Info({ rotulo, valor }: { rotulo: string; valor: ReactNode }) {
 const numero = new Intl.NumberFormat('pt-BR')
 const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
 
+interface DadosBasicos {
+  razao_social: string
+  cnpj: string
+  segmento: string
+  plano: string
+  valor_mensal: string
+  data_inicio_contrato: string
+}
+
 export default function ClienteDetalhe() {
   const id = Number(useParams().id)
-  const { dados, carregando, erro } = useCliente(id)
+  const { dados, carregando, erro, recarregar } = useCliente(id)
   const [registradas, setRegistradas] = useState<AcaoAplicada[]>([])
   const [registrando, setRegistrando] = useState<number[]>([])
   const [comentarios, setComentarios] = useState<Record<number, string>>({})
   const [erroAcao, setErroAcao] = useState<string | null>(null)
   const [aba, setAba] = useState<'visao' | 'dados' | 'acoes'>('visao')
+  const [editando, setEditando] = useState(false)
+  const [salvandoDados, setSalvandoDados] = useState(false)
+  const [erroDados, setErroDados] = useState<string | null>(null)
+  const [dadosBasicos, setDadosBasicos] = useState<DadosBasicos>({
+    razao_social: '', cnpj: '', segmento: '', plano: '', valor_mensal: '', data_inicio_contrato: '',
+  })
+
+  useEffect(() => {
+    const cliente = dados?.cliente
+    if (!cliente) return
+    setDadosBasicos({
+      razao_social: cliente.razao_social,
+      cnpj: cliente.cnpj ?? '',
+      segmento: cliente.segmento,
+      plano: cliente.plano,
+      valor_mensal: cliente.valor_mensal === null ? '' : String(cliente.valor_mensal),
+      data_inicio_contrato: cliente.data_inicio_contrato ?? '',
+    })
+  }, [dados?.cliente])
 
   if (carregando) return <Aviso>Carregando detalhes do cliente…</Aviso>
   if (erro) return <Aviso tipo="erro">Erro ao carregar o cliente: {erro}</Aviso>
   if (!dados) return <Aviso>Cliente não encontrado. <Link to="/" className="font-bold text-aco underline">Voltar ao painel</Link></Aviso>
 
   const { cliente, analise, uso, atendimentos, nps, acoes } = dados
+  const problemasCliente = validarDadosBasicos(cliente)
+  const problemasEdicao = validarDadosBasicos(dadosBasicos)
   const registrosAcao = new Map<number, AcaoAplicada[]>()
   for (const registro of [...dados.acoesRegistradas, ...registradas]) {
     registrosAcao.set(registro.acao_id, [...(registrosAcao.get(registro.acao_id) ?? []), registro])
@@ -55,6 +87,68 @@ export default function ClienteDetalhe() {
     finally { setRegistrando((ids) => ids.filter((registroId) => registroId !== acaoId)) }
   }
 
+  async function salvarDadosBasicos(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setErroDados(null)
+    if (problemasEdicao.length > 0) {
+      setErroDados(`Corrija os dados antes de salvar: ${problemasEdicao.join(' ')}`)
+      return
+    }
+
+    const cnpjNormalizado = dadosBasicos.cnpj.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+
+    const valorMensal = dadosBasicos.valor_mensal.trim() === '' ? null : Number(dadosBasicos.valor_mensal)
+
+    setSalvandoDados(true)
+    try {
+      const { data, error } = await supabase
+        .from('cliente')
+        .update({
+          razao_social: dadosBasicos.razao_social.trim(),
+          cnpj: cnpjNormalizado,
+          segmento: dadosBasicos.segmento.trim(),
+          plano: dadosBasicos.plano.trim(),
+          valor_mensal: valorMensal,
+          data_inicio_contrato: dadosBasicos.data_inicio_contrato,
+        })
+        .eq('id', cliente.id)
+        .select('id')
+        .maybeSingle()
+
+      if (error) {
+        if (/uq_cliente_usuario_cnpj|uq_cliente_cnpj|duplicate key/i.test(error.message)) {
+          throw new Error('Já existe um cliente cadastrado com este CNPJ.')
+        }
+        if (/ck_cliente_cnpj/i.test(error.message)) {
+          throw new Error('O banco rejeitou o CNPJ. Confira os dígitos verificadores.')
+        }
+        throw new Error(error.message)
+      }
+      if (!data) throw new Error('Não foi possível atualizar o cliente. Verifique se você tem acesso a este cadastro.')
+      if (!await recarregar()) throw new Error('Os dados foram salvos, mas não foi possível recarregar o perfil.')
+      setEditando(false)
+    } catch (e) {
+      setErroDados(e instanceof Error ? e.message : 'Não foi possível atualizar os dados do cliente.')
+    } finally {
+      setSalvandoDados(false)
+    }
+  }
+
+  function abrirEdicaoDados() {
+    setDadosBasicos({
+      razao_social: cliente.razao_social,
+      cnpj: cliente.cnpj ?? '',
+      segmento: cliente.segmento,
+      plano: cliente.plano,
+      valor_mensal: cliente.valor_mensal === null ? '' : String(cliente.valor_mensal),
+      data_inicio_contrato: cliente.data_inicio_contrato,
+    })
+    setErroDados(null)
+    setEditando(true)
+  }
+
+  const cnpjEditavelValido = cnpjValido(dadosBasicos.cnpj)
+
   return <>
     <nav className="mb-4 flex items-center gap-2 text-sm"><Link to="/" className="font-bold text-aco hover:underline">Painel</Link><span className="text-suave">/</span><span className="truncate text-suave">{cliente.razao_social}</span></nav>
 
@@ -65,10 +159,16 @@ export default function ClienteDetalhe() {
             <div>
               <p className="rotulo mb-2">Detalhes do cliente</p>
               <h1 className="max-w-4xl text-3xl font-extrabold tracking-[-.03em] sm:text-4xl">{cliente.razao_social}</h1>
-              <p className="mt-2 text-suave">{cliente.cnpj || 'CNPJ não informado'}</p>
+              <p className={`mt-2 ${!cliente.cnpj || !cnpjValido(cliente.cnpj) ? 'font-semibold text-risco-alto' : 'text-suave'}`}>
+                {cliente.cnpj || 'CNPJ não informado'}
+                {(!cliente.cnpj || !cnpjValido(cliente.cnpj)) && <span className="ml-2 rounded-full bg-[#fff0ec] px-2 py-1 text-xs font-bold">CNPJ inválido</span>}
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <span className="rounded-full bg-petroleo-claro px-3 py-1.5 text-xs font-bold text-aco">{cliente.status}</span>
+              <button type="button" onClick={editando ? () => setEditando(false) : abrirEdicaoDados} className="rounded-lg border border-aco px-4 py-2 text-xs font-bold uppercase tracking-wider text-aco hover:bg-petroleo-claro">
+                {editando ? 'Fechar edição' : problemasCliente.length > 0 ? 'Corrigir dados' : 'Editar dados'}
+              </button>
               {cliente.cnpj && (
                 <Link
                   to={`/importar?clienteId=${cliente.id}`}
@@ -87,6 +187,62 @@ export default function ClienteDetalhe() {
         </div>
       </div>
     </section>
+
+    {problemasCliente.length > 0 && (
+      <div className="mb-4">
+        <Aviso tipo="erro">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="font-bold">Há informações que precisam de correção neste cadastro:</p>
+              <ul className="mt-2 list-inside list-disc space-y-1">
+                {problemasCliente.map((problema) => <li key={problema}>{problema}</li>)}
+              </ul>
+            </div>
+            <button type="button" onClick={abrirEdicaoDados} className="rounded-lg border border-current px-3 py-2 text-xs font-bold uppercase tracking-wider hover:bg-white/60">
+              Corrigir dados
+            </button>
+          </div>
+        </Aviso>
+      </div>
+    )}
+
+    {editando && (
+      <section className="card mb-4 p-5 sm:p-6">
+        <div className="mb-5">
+          <h2 className="text-xl font-extrabold tracking-tight">Editar dados básicos</h2>
+          <p className="mt-1 text-sm text-suave">Corrija as informações cadastrais. O CNPJ precisa ter dígitos verificadores válidos.</p>
+        </div>
+        {erroDados && <div className="mb-4"><Aviso tipo="erro">{erroDados}</Aviso></div>}
+        <form onSubmit={salvarDadosBasicos} className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="text-sm font-bold sm:col-span-2">Razão social
+              <input required minLength={2} maxLength={150} value={dadosBasicos.razao_social} onChange={(e) => setDadosBasicos((atual) => ({ ...atual, razao_social: e.target.value }))} className="mt-1 block w-full rounded-lg border border-linha p-2 font-normal focus:border-aco focus:outline-none" />
+            </label>
+            <label className="text-sm font-bold">CNPJ
+              <input required value={dadosBasicos.cnpj} aria-invalid={!cnpjEditavelValido} aria-describedby="cnpj-validacao" onChange={(e) => setDadosBasicos((atual) => ({ ...atual, cnpj: e.target.value }))} placeholder="00.000.000/0000-00" className={`mt-1 block w-full rounded-lg border p-2 font-normal focus:outline-none ${cnpjEditavelValido ? 'border-linha focus:border-aco' : 'border-risco-alto bg-[#fff0ec] text-risco-alto focus:border-risco-alto focus:ring-1 focus:ring-risco-alto'}`} />
+              {!cnpjEditavelValido && <span id="cnpj-validacao" className="mt-1 block text-xs font-semibold text-risco-alto">CNPJ inválido. Confira os dígitos verificadores.</span>}
+              {cnpjEditavelValido && <span id="cnpj-validacao" className="mt-1 block text-xs font-semibold text-risco-baixo">CNPJ válido.</span>}
+            </label>
+            <label className="text-sm font-bold">Data de início do contrato
+              <input required type="date" value={dadosBasicos.data_inicio_contrato} onChange={(e) => setDadosBasicos((atual) => ({ ...atual, data_inicio_contrato: e.target.value }))} className="mt-1 block w-full rounded-lg border border-linha p-2 font-normal focus:border-aco focus:outline-none" />
+            </label>
+            <label className="text-sm font-bold">Segmento
+              <input required maxLength={80} value={dadosBasicos.segmento} onChange={(e) => setDadosBasicos((atual) => ({ ...atual, segmento: e.target.value }))} className="mt-1 block w-full rounded-lg border border-linha p-2 font-normal focus:border-aco focus:outline-none" />
+            </label>
+            <label className="text-sm font-bold">Plano
+              <input required maxLength={60} value={dadosBasicos.plano} onChange={(e) => setDadosBasicos((atual) => ({ ...atual, plano: e.target.value }))} className="mt-1 block w-full rounded-lg border border-linha p-2 font-normal focus:border-aco focus:outline-none" />
+            </label>
+            <label className="text-sm font-bold">Valor mensal
+              <input type="number" min="0" step="0.01" value={dadosBasicos.valor_mensal} onChange={(e) => setDadosBasicos((atual) => ({ ...atual, valor_mensal: e.target.value }))} placeholder="Opcional" className="mt-1 block w-full rounded-lg border border-linha p-2 font-normal focus:border-aco focus:outline-none" />
+            </label>
+          </div>
+          <div className="flex gap-3">
+            <button type="submit" disabled={salvandoDados || problemasEdicao.length > 0} title={problemasEdicao.length > 0 ? 'Corrija todos os campos inválidos antes de salvar.' : undefined} className="rounded-lg bg-aco px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-marinho disabled:cursor-not-allowed disabled:bg-linha disabled:text-suave">{salvandoDados ? 'Salvando…' : problemasEdicao.length > 0 ? 'Corrija os dados para salvar' : 'Salvar alterações'}</button>
+            <button type="button" disabled={salvandoDados} onClick={() => { setEditando(false); setErroDados(null) }} className="rounded-lg border border-linha px-4 py-2 text-xs font-bold uppercase tracking-wider text-suave hover:border-aco hover:text-aco disabled:opacity-50">Cancelar</button>
+          </div>
+        </form>
+      </section>
+    )}
 
     <section className="mb-4 grid gap-3 sm:grid-cols-3">
       <div className="card px-5 py-4"><p className="text-xs font-bold text-suave">Acessos no último mês</p><div className="mt-1 flex items-baseline gap-2"><strong className="text-2xl font-extrabold">{ultimoUso ? numero.format(ultimoUso.qtd_acessos) : '—'}</strong><span className="text-xs text-suave">{ultimoUso ? `${numero.format(ultimoUso.qtd_usuarios_ativos)} usuários ativos` : 'Sem dados'}</span></div></div>

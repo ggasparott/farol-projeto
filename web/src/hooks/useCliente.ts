@@ -18,7 +18,7 @@ export function useCliente(id: number) {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
 
-  const carregar = useCallback(async () => {
+  const carregar = useCallback(async (): Promise<boolean> => {
     setCarregando(true)
     const [c, a, u, t, n, ac, ar] = await Promise.all([
       supabase.from('cliente').select('*').eq('id', id).maybeSingle(),
@@ -44,9 +44,10 @@ export function useCliente(id: number) {
       acoesRegistradas: (ar.data as AcaoAplicada[]) ?? [],
     } : null)
     setCarregando(false)
+    return !falha
   }, [id])
 
-  useEffect(() => { carregar() }, [carregar])
+  useEffect(() => { void carregar() }, [carregar])
 
-  return { dados, carregando, erro }
+  return { dados, carregando, erro, recarregar: carregar }
 }

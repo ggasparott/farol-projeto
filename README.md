@@ -42,7 +42,7 @@ farol-projeto/
 
 ## Escopo da Versão Alpha
 
-Casos de uso priorizados: **UC01** cadastrar cliente, **UC02** importar dados, **UC06/UC07** calcular e classificar risco, **UC08** painel de clientes em risco, **UC09** detalhes do cliente, **UC10** sugestões de retenção e **UC12** atualizar análise.
+Casos de uso priorizados: **UC01** cadastrar cliente, **UC02** importar dados, **UC06/UC07** calcular e classificar risco, **UC08** painel de clientes em risco, **UC09** detalhes do cliente, **UC10** sugestões de retenção e **UC12** atualizar análise. O ranking destaca ao lado do nome os cadastros com dados ausentes ou inválidos; o perfil também alerta sobre inconsistências e permite editar as informações básicas. Durante a edição, o campo de CNPJ indica visualmente se o número é válido.
 
 Ficam para depois a origem por API simulada e um agente de IA mais completo. A priorização (UC11) sai da ordenação do painel.
 
@@ -67,7 +67,7 @@ supabase functions deploy classificar-risco
 A função processa os clientes pendentes (`fn_clientes_para_atualizar`), pede à OpenAI a **intensidade (0–1) de cada fator** e grava `score = soma(peso × intensidade)`. Se a OpenAI falhar, cai no cálculo por regras (`04_score_provisorio.sql`).
 
 ### 3. Dados de teste
-Em `db/seeds/` há 4 CSVs (50 clientes, uso, atendimentos e NPS). Na tela **Importar**, selecione os arquivos desejados e envie com um clique. Cada arquivo é processado em uma chamada separada, os clientes são enviados primeiro e a classificação é disparada uma vez ao final. A tela também oferece um modelo CSV para cada tipo; CNPJs inválidos, inclusive com dígitos verificadores incorretos, são rejeitados por linha.
+Em `db/seeds/` há 4 CSVs válidos (50 clientes, uso, atendimentos e NPS) e `5_cliente_cnpj_invalido.csv`, um caso negativo para testar a rejeição de CNPJ inválido. Na tela **Importar**, selecione os arquivos desejados e envie com um clique. Cada arquivo é processado em uma chamada separada, os clientes são enviados primeiro e a classificação é disparada uma vez ao final. A tela também oferece um modelo CSV para cada tipo; CNPJs inválidos, inclusive com dígitos verificadores incorretos, são rejeitados por linha. No cadastro manual, o CNPJ inválido é barrado antes do envio ao banco.
 
 ### 4. Frontend
 ```bash

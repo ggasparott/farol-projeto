@@ -2,11 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { LinhaPainel, NivelRisco } from '../types'
 import { ORDEM } from '../lib/risco'
+import { validarDadosBasicos } from '../lib/validacaoCliente'
 
 interface ClientePainel {
   id: number
   razao_social: string
+  cnpj: string | null
   segmento: string
+  plano: string
+  valor_mensal: number | null
+  data_inicio_contrato: string
   avaliacao_nps: { nota: number; data_coleta: string }[]
   analise_risco: {
     id: number
@@ -29,7 +34,7 @@ export function usePainel(filtro: NivelRisco | 'TODOS') {
     setCarregando(true)
     supabase
       .from('cliente')
-      .select('id, razao_social, segmento, avaliacao_nps(nota, data_coleta), analise_risco(id, score, nivel_risco, executada_em, vigente)')
+      .select('id, razao_social, cnpj, segmento, plano, valor_mensal, data_inicio_contrato, avaliacao_nps(nota, data_coleta), analise_risco(id, score, nivel_risco, executada_em, vigente)')
       .eq('status', 'ATIVO')
       .order('razao_social')
       .then(({ data, error }) => {
@@ -53,6 +58,7 @@ export function usePainel(filtro: NivelRisco | 'TODOS') {
               id: cliente.id,
               razao_social: cliente.razao_social,
               segmento: cliente.segmento,
+              problemas_cadastro: validarDadosBasicos(cliente),
               avaliacao_nps: cliente.avaliacao_nps ?? [],
             },
           }
