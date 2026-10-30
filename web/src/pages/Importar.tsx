@@ -82,6 +82,9 @@ function mensagemLegivel(mensagem: string): string {
 }
 
 function mensagemFalhaImportacao(mensagem: string): string {
+  if (/fk_importacao_usuario/i.test(mensagem)) {
+    return 'O perfil da sua conta ainda não foi criado no banco. Execute db/10_perfil_usuario_auth.sql no SQL Editor do Supabase e tente importar novamente.'
+  }
   if (/permission denied for function/i.test(mensagem)) {
     return 'O Supabase não autorizou a importação. Confira se a função fn_importar_conjunto tem permissão EXECUTE para authenticated.'
   }

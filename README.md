@@ -22,7 +22,7 @@ farol-projeto/
 │   ├── 01_schema.sql      # Tipos, tabelas, constraints, triggers e catálogos
 │   ├── 02_procedures.sql  # sp_importar_lote, sp_calcular_risco_cliente, fn_clientes_para_atualizar
 │   ├── 03–07              # RPCs, score por regras, importação de uso/atend./NPS, RLS, SECURITY DEFINER
-│   ├── 08–09              # Validação de CNPJ e isolamento de dados por conta
+│   ├── 08–10              # Validação de CNPJ, isolamento e perfis vinculados ao Auth
 │   └── seeds/             # 4 CSVs sintéticos (50 clientes, uso, atendimentos, NPS)
 ├── web/                   # Frontend React + TS + Tailwind
 │   ├── public/
@@ -52,12 +52,12 @@ O recorte completo, os itens adiados e o roteiro de demonstração estão em [`d
 
 ### 1. Banco de dados
 1. Crie um projeto no Supabase.
-2. No SQL Editor, execute em ordem: `db/01_schema.sql`, `02_procedures.sql`, `03_rpc.sql`, `04_score_provisorio.sql`, `05_importar_complementos.sql`, `06_rls.sql`, `07_rpc_definer.sql` e `09_isolamento_contas.sql`.
+2. No SQL Editor, execute em ordem: `db/01_schema.sql`, `02_procedures.sql`, `03_rpc.sql`, `04_score_provisorio.sql`, `05_importar_complementos.sql`, `06_rls.sql`, `07_rpc_definer.sql`, `09_isolamento_contas.sql` e `10_perfil_usuario_auth.sql`.
 3. **Sempre que rodar de novo o 02–05, rode o 07 em seguida:** `CREATE OR REPLACE` desfaz o `SECURITY DEFINER` das funções.
 
 Para um banco já existente, execute `db/08_validar_cnpj.sql` e depois reaplique `db/02_procedures.sql`, `db/05_importar_complementos.sql` e `db/07_rpc_definer.sql`. A migração interrompe com uma mensagem explícita caso já existam CNPJs inválidos; corrija esses registros antes de tentar novamente.
 
-Em banco já existente, execute `db/09_isolamento_contas.sql` para restringir clientes e dados relacionados ao `usuario_id` da conta autenticada. Registros antigos sem proprietário ficam ocultos; antes de atribuí-los, confirme quem é o dono correto. Depois, publique novamente a Edge Function `classificar-risco`.
+Em banco já existente, execute `db/09_isolamento_contas.sql` para restringir clientes e dados relacionados ao `usuario_id` da conta autenticada e, em seguida, `db/10_perfil_usuario_auth.sql` para criar os perfis de contas existentes que estejam faltando e manter os próximos cadastros sincronizados com o Supabase Auth. Registros antigos sem proprietário ficam ocultos; antes de atribuí-los, confirme quem é o dono correto. Depois, publique novamente a Edge Function `classificar-risco`.
 
 ### 2. Edge Function de classificação (IA)
 ```bash
