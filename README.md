@@ -67,7 +67,7 @@ supabase functions deploy classificar-risco
 A função processa os clientes pendentes (`fn_clientes_para_atualizar`), pede à OpenAI a **intensidade (0–1) de cada fator** e grava `score = soma(peso × intensidade)`. Se a OpenAI falhar, cai no cálculo por regras (`04_score_provisorio.sql`).
 
 ### 3. Dados de teste
-Em `db/seeds/` há 4 CSVs válidos (50 clientes, uso, atendimentos e NPS) e `5_cliente_cnpj_invalido.csv`, um caso negativo para testar a rejeição de CNPJ inválido. Na tela **Importar**, selecione os arquivos desejados e envie com um clique. Cada arquivo é processado em uma chamada separada, os clientes são enviados primeiro e a classificação é disparada uma vez ao final. A tela também oferece um modelo CSV para cada tipo; CNPJs inválidos, inclusive com dígitos verificadores incorretos, são rejeitados por linha. No cadastro manual, o CNPJ inválido é barrado antes do envio ao banco.
+Em `db/seeds/` há 4 CSVs válidos (50 clientes, uso, atendimentos e NPS) e `5_cliente_cnpj_invalido.csv`, um caso negativo para testar a rejeição de CNPJ inválido. Na tela **Importar**, selecione os arquivos desejados e envie com um clique. Cada arquivo é processado em uma chamada separada, os clientes são enviados primeiro e a classificação é disparada uma vez ao final. A tela também oferece um modelo CSV para cada tipo; CNPJs inválidos, inclusive com dígitos verificadores incorretos, são rejeitados por linha. No cadastro manual, o CNPJ inválido é barrado antes do envio ao banco. Após cadastrar manualmente um cliente, a tela oferece a importação opcional somente de uso, atendimentos e NPS desse cliente, sem exigir um CSV de clientes.
 
 ### 4. Frontend
 ```bash

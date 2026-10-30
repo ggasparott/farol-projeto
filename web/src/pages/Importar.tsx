@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import Papa from 'papaparse'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import Aviso from '../components/Aviso'
 import { supabase } from '../lib/supabase'
 import type { Importacao, ImportacaoErro } from '../types'
@@ -157,7 +157,9 @@ function baixarModelo(tipo: Tipo) {
 
 export default function Importar() {
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const clienteId = Number(searchParams.get('clienteId')) || null
+  const cadastroManual = Boolean(clienteId && searchParams.get('cadastro') === 'novo')
   const [arquivos, setArquivos] = useState<Arquivos>({
     CLIENTE: null,
     USO: null,
@@ -309,6 +311,14 @@ export default function Importar() {
       <h1 className="mb-6 text-2xl font-bold uppercase">{clienteAlvo ? `Importar dados · ${clienteAlvo.razao_social}` : 'Importar dados de clientes'}</h1>
       {carregandoCliente && <div className="mb-5"><Aviso>Carregando cliente…</Aviso></div>}
 
+      {cadastroManual && clienteAlvo && (
+        <div className="mb-5 max-w-3xl">
+          <Aviso>
+            Cliente cadastrado. Se quiser, importe agora os arquivos extras de uso, atendimentos ou NPS. Só serão consideradas linhas deste cliente; essa etapa é opcional.
+          </Aviso>
+        </div>
+      )}
+
       <div className="max-w-3xl border border-linha bg-white p-5">
         <p className="mb-4 text-sm text-suave">
           {clienteAlvo
@@ -355,6 +365,16 @@ export default function Importar() {
         >
           {enviando ? 'Validando e importando…' : 'Importar arquivos selecionados'}
         </button>
+        {clienteAlvo && (
+          <button
+            type="button"
+            disabled={enviando}
+            onClick={() => navigate(`/clientes/${clienteAlvo.id}`)}
+            className="ml-3 mt-5 border border-linha px-4 py-2 text-xs font-bold uppercase tracking-widest text-suave hover:border-aco hover:text-aco disabled:opacity-50"
+          >
+            {cadastroManual ? 'Continuar sem importar' : 'Voltar ao perfil'}
+          </button>
+        )}
       </div>
 
       <div className="mt-6 max-w-3xl space-y-4">
@@ -367,7 +387,7 @@ export default function Importar() {
                 {lote.total_linhas} linhas · <b>{lote.total_gravados}</b> gravadas ·{' '}
                 <b>{lote.total_rejeitados}</b> rejeitadas
               </p>
-              <Link to="/" className="mt-3 inline-block text-xs font-bold uppercase tracking-wider text-aco underline">Ir ao painel</Link>
+              <Link to={clienteAlvo ? `/clientes/${clienteAlvo.id}` : '/'} className="mt-3 inline-block text-xs font-bold uppercase tracking-wider text-aco underline">{clienteAlvo ? 'Voltar ao perfil do cliente' : 'Ir ao painel'}</Link>
             </div>
             {erros.length > 0 && (
               <div className="border border-linha bg-white p-5">

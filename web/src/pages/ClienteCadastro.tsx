@@ -55,7 +55,7 @@ export default function ClienteCadastro() {
       return
     }
 
-    navigate(`/clientes/${data.id}`)
+    navigate(`/importar?clienteId=${data.id}&cadastro=novo`)
   }
 
   return (
