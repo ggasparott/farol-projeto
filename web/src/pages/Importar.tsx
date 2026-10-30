@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Papa from 'papaparse'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import Aviso from '../components/Aviso'
 import { supabase } from '../lib/supabase'
 import type { Importacao, ImportacaoErro } from '../types'
@@ -15,6 +15,10 @@ type Tipo = keyof typeof TIPOS
 type Arquivos = Record<Tipo, File | null>
 type ResumoLote = { tipo: Tipo; nomeArquivo: string; lote: Importacao; erros: ImportacaoErro[] }
 interface ClienteImportacao { id: number; razao_social: string; cnpj: string }
+interface EstadoImportacaoCadastro {
+  importarAutomaticamente?: boolean
+  arquivosExtras?: Partial<Record<'USO' | 'ATENDIMENTO' | 'NPS', File>>
+}
 
 function mensagemLegivel(mensagem: string): string {
   if (/^(O arquivo|O CSV|Os dados|Não foi possível|Há |A criticidade|O status|O CNPJ|A razão|O valor|Acessos|A nota|A primeira|O fechamento|Esta linha|Falta)/.test(mensagem)) {
@@ -157,20 +161,23 @@ function baixarModelo(tipo: Tipo) {
 
 export default function Importar() {
   const [searchParams] = useSearchParams()
+  const location = useLocation()
   const navigate = useNavigate()
+  const estadoCadastro = location.state as EstadoImportacaoCadastro | null
   const clienteId = Number(searchParams.get('clienteId')) || null
   const cadastroManual = Boolean(clienteId && searchParams.get('cadastro') === 'novo')
   const [arquivos, setArquivos] = useState<Arquivos>({
     CLIENTE: null,
-    USO: null,
-    ATENDIMENTO: null,
-    NPS: null,
+    USO: estadoCadastro?.arquivosExtras?.USO ?? null,
+    ATENDIMENTO: estadoCadastro?.arquivosExtras?.ATENDIMENTO ?? null,
+    NPS: estadoCadastro?.arquivosExtras?.NPS ?? null,
   })
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [resumos, setResumos] = useState<ResumoLote[]>([])
   const [clienteAlvo, setClienteAlvo] = useState<ClienteImportacao | null>(null)
   const [carregandoCliente, setCarregandoCliente] = useState(Boolean(clienteId))
+  const importacaoAutomaticaIniciada = useRef(false)
 
   useEffect(() => {
     let ativo = true
@@ -302,6 +309,20 @@ export default function Importar() {
     }
   }
 
+  useEffect(() => {
+    if (
+      !cadastroManual
+      || !estadoCadastro?.importarAutomaticamente
+      || carregandoCliente
+      || !clienteAlvo
+      || importacaoAutomaticaIniciada.current
+    ) return
+
+    importacaoAutomaticaIniciada.current = true
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null })
+    void importar()
+  }, [cadastroManual, estadoCadastro?.importarAutomaticamente, carregandoCliente, clienteAlvo, navigate, location.pathname, location.search])
+
   const temArquivo = Object.values(arquivos).some(Boolean)
   const tiposVisiveis = (Object.keys(TIPOS) as Tipo[]).filter((tipo) => !clienteId || tipo !== 'CLIENTE')
 
@@ -314,7 +335,7 @@ export default function Importar() {
       {cadastroManual && clienteAlvo && (
         <div className="mb-5 max-w-3xl">
           <Aviso>
-            Cliente cadastrado. Se quiser, importe agora os arquivos extras de uso, atendimentos ou NPS. Só serão consideradas linhas deste cliente; essa etapa é opcional.
+            Cliente cadastrado. Os arquivos extras selecionados no formulário serão importados apenas para este CNPJ.
           </Aviso>
         </div>
       )}
@@ -322,10 +343,17 @@ export default function Importar() {
       <div className="max-w-3xl border border-linha bg-white p-5">
         <p className="mb-4 text-sm text-suave">
           {clienteAlvo
-            ? `Selecione arquivos de uso, atendimentos ou NPS. Serão importadas somente as linhas do CNPJ ${clienteAlvo.cnpj}.`
+            ? `Serão importadas somente as linhas do CNPJ ${clienteAlvo.cnpj}.`
             : 'Selecione um ou mais arquivos CSV. Clientes são processados antes dos demais dados.'}
           O CNPJ é validado, incluindo os dígitos verificadores.
         </p>
+        {clienteAlvo && Object.values(arquivos).some(Boolean) && (
+          <ul className="mb-4 space-y-1 text-sm text-suave">
+            {Object.entries(arquivos).flatMap(([tipo, arquivo]) => arquivo
+              ? [<li key={tipo}>{TIPOS[tipo as Tipo].rotulo}: <b>{arquivo.name}</b></li>]
+              : [])}
+          </ul>
+        )}
         <div className="space-y-4">
           {tiposVisiveis.map((tipo) => (
             <div key={tipo} className="border-b border-linha pb-4 last:border-0 last:pb-0">

@@ -5,6 +5,12 @@ import { useAuth } from '../contexts/AuthContext'
 import { cnpjValido } from '../lib/cnpj'
 import { supabase } from '../lib/supabase'
 
+type ArquivosExtras = {
+  USO: File | null
+  ATENDIMENTO: File | null
+  NPS: File | null
+}
+
 function mensagemCadastro(mensagem: string) {
   if (/uq_cliente_cnpj|duplicate key/i.test(mensagem)) return 'Já existe um cliente cadastrado com este CNPJ.'
   if (/ck_cliente_cnpj/i.test(mensagem)) return 'Informe um CNPJ válido, com os dígitos verificadores corretos.'
@@ -21,6 +27,11 @@ export default function ClienteCadastro() {
   const [plano, setPlano] = useState('')
   const [valorMensal, setValorMensal] = useState('')
   const [dataInicio, setDataInicio] = useState('')
+  const [arquivosExtras, setArquivosExtras] = useState<ArquivosExtras>({
+    USO: null,
+    ATENDIMENTO: null,
+    NPS: null,
+  })
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -55,7 +66,16 @@ export default function ClienteCadastro() {
       return
     }
 
-    navigate(`/importar?clienteId=${data.id}&cadastro=novo`)
+    const extrasSelecionados = Object.fromEntries(
+      Object.entries(arquivosExtras).filter(([, arquivo]) => arquivo !== null),
+    ) as Partial<ArquivosExtras>
+    if (Object.keys(extrasSelecionados).length > 0) {
+      navigate(`/importar?clienteId=${data.id}&cadastro=novo`, {
+        state: { importarAutomaticamente: true, arquivosExtras: extrasSelecionados },
+      })
+    } else {
+      navigate(`/clientes/${data.id}`)
+    }
   }
 
   return (
@@ -149,13 +169,39 @@ export default function ClienteCadastro() {
           </label>
         </div>
 
+        <fieldset className="space-y-4 border-t border-linha pt-5">
+          <legend className="px-1 text-sm font-bold">Dados extras (opcional)</legend>
+          <p className="text-sm text-suave">
+            Selecione arquivos CSV de uso, atendimentos ou NPS. Depois de criar o cliente, eles serão importados automaticamente apenas para este CNPJ.
+          </p>
+          {([
+            ['USO', 'Uso mensal'],
+            ['ATENDIMENTO', 'Atendimentos'],
+            ['NPS', 'NPS'],
+          ] as const).map(([tipo, rotulo]) => (
+            <label key={tipo} className="block text-sm font-bold">
+              {rotulo}
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                disabled={salvando}
+                onChange={(e) => setArquivosExtras((atuais) => ({
+                  ...atuais,
+                  [tipo]: e.target.files?.[0] ?? null,
+                }))}
+                className="mt-1 block w-full font-normal"
+              />
+            </label>
+          ))}
+        </fieldset>
+
         <div className="flex flex-wrap gap-3">
           <button
             type="submit"
             disabled={salvando}
             className="bg-aco px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-marinho disabled:bg-linha disabled:text-suave"
           >
-            {salvando ? 'Salvando…' : 'Cadastrar cliente'}
+            {salvando ? 'Salvando…' : Object.values(arquivosExtras).some(Boolean) ? 'Cadastrar e importar dados' : 'Cadastrar cliente'}
           </button>
           <Link to="/" className="border border-linha px-4 py-2 text-xs font-bold uppercase tracking-wider text-suave hover:border-aco hover:text-aco">
             Cancelar
