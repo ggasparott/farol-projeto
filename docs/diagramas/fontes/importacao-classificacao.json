@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Farol: importação e classificação de risco",
+    "locale": "pt-BR",
+    "output": "docs/diagramas/importacao-classificacao.html",
+    "quality_profile": "showcase",
+    "repository": { "url": "https://github.com/ggasparott/farol-projeto", "revision": "bf48176b46a627e1640878c116bd855f56d8c066" }
+  },
+  "participants": [
+    { "id": "analista", "type": "external", "label": "Analista", "sublabel": "tela Importar" },
+    { "id": "web", "type": "frontend", "label": "Web Farol", "sublabel": "Importar.tsx", "sources": [{ "path": "web/src/pages/Importar.tsx", "line": 144, "end_line": 159 }] },
+    { "id": "edge", "type": "backend", "label": "classificar-risco", "sublabel": "Edge Function", "sources": [{ "path": "supabase/functions/classificar-risco/index.ts", "line": 57, "end_line": 129 }] },
+    { "id": "db", "type": "database", "label": "PostgreSQL", "sublabel": "RPCs e triggers", "sources": [{ "path": "db/05_importar_complementos.sql", "line": 111 }, { "path": "db/04_score_provisorio.sql", "line": 10 }, { "path": "db/01_schema.sql", "line": 469, "end_line": 521 }] },
+    { "id": "openai", "type": "external", "label": "OpenAI", "sublabel": "gpt-4o-mini", "sources": [{ "path": "supabase/functions/classificar-risco/index.ts", "line": 17, "end_line": 43 }] }
+  ],
+  "segments": [
+    { "from": 150, "to": 268, "label": "Importação" },
+    { "from": 274, "to": 505, "label": "Classificação, em grupos de 8 clientes" },
+    { "from": 511, "to": 600, "label": "Resultado" }
+  ],
+  "messages": [
+    { "id": "envia", "from": "analista", "to": "web", "y": 170, "label": "envia os CSVs", "variant": "emphasis" },
+    { "id": "conjunto", "from": "web", "to": "db", "y": 200, "label": "rpc fn_importar_conjunto", "variant": "emphasis", "note": "Clientes primeiro; erros ficam por linha." },
+    { "id": "ids", "from": "db", "to": "web", "y": 256, "label": "ids dos lotes", "variant": "return" },
+    { "id": "invoke", "from": "web", "to": "edge", "y": 285, "label": "invoke com JWT", "variant": "security" },
+    { "id": "pendentes", "from": "edge", "to": "db", "y": 315, "label": "fn_clientes_para_atualizar", "variant": "default" },
+    { "id": "lista", "from": "db", "to": "edge", "y": 343, "label": "pendentes (usa até 50)", "variant": "return" },
+    { "id": "pergunta", "from": "edge", "to": "openai", "y": 373, "label": "dados do cliente", "variant": "default" },
+    { "id": "resposta", "from": "openai", "to": "edge", "y": 401, "label": "intensidade por fator", "variant": "return", "note": "Score = soma de peso × intensidade." },
+    { "id": "grava", "from": "edge", "to": "db", "y": 462, "label": "fn_calcular_risco_cliente", "variant": "emphasis" },
+    { "id": "regras", "from": "edge", "to": "db", "y": 490, "label": "se falhar: score por regras", "variant": "dashed" },
+    { "id": "resumo", "from": "edge", "to": "web", "y": 525, "label": "processados, ia, regras", "variant": "return" },
+    { "id": "consulta", "from": "web", "to": "db", "y": 553, "label": "lê lotes e erros", "variant": "default" },
+    { "id": "exibe", "from": "web", "to": "analista", "y": 583, "label": "resumo da importação", "variant": "return" }
+  ],
+  "activations": [
+    { "participant": "web", "from": 170, "to": 588, "type": "frontend" },
+    { "participant": "edge", "from": 285, "to": 530, "type": "backend" },
+    { "participant": "openai", "from": 368, "to": 406, "type": "external" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Triggers", "items": ["A gravação da análise desmarca a anterior e define o nível de risco."] },
+    { "dot": "amber", "title": "Limites", "items": ["Cada chamada trata até 50 clientes; os restantes aparecem no resumo."] }
+  ]
+}

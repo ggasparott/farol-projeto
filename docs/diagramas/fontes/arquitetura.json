@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Farol: arquitetura da versão Alpha",
+    "locale": "pt-BR",
+    "output": "docs/diagramas/arquitetura.html",
+    "quality_profile": "showcase",
+    "repository": { "url": "https://github.com/ggasparott/farol-projeto", "revision": "bf48176b46a627e1640878c116bd855f56d8c066" }
+  },
+  "components": [
+    { "id": "analista", "type": "external", "label": "Analista de CS", "sublabel": "navegador", "pos": [40, 170], "size": [130, 70], "sources": [{ "path": "web/src/App.tsx", "line": 21, "end_line": 29 }] },
+    { "id": "spa", "type": "frontend", "label": "Web Farol", "sublabel": "React + TS + Vite", "pos": [260, 150], "size": [150, 110], "sources": [{ "path": "web/src/App.tsx", "line": 12, "end_line": 34 }, { "path": "web/src/pages/Importar.tsx", "line": 144, "end_line": 151 }] },
+    { "id": "firebase", "type": "cloud", "label": "Firebase Hosting", "sublabel": "web/dist, canal live", "pos": [260, 340], "size": [150, 70], "sources": [{ "path": "firebase.json", "line": 1 }] },
+    { "id": "actions", "type": "backend", "label": "GitHub Actions", "sublabel": "lint, build, deploy", "pos": [260, 490], "size": [150, 70], "sources": [{ "path": ".github/workflows/firebase-hosting.yml", "line": 1 }] },
+    { "id": "auth", "type": "security", "label": "Supabase Auth", "sublabel": "sessão e JWT", "pos": [640, 30], "size": [160, 70], "sources": [{ "path": "web/src/contexts/AuthContext.tsx", "line": 24 }, { "path": "supabase/functions/classificar-risco/index.ts", "line": 61, "end_line": 65 }] },
+    { "id": "edge", "type": "backend", "label": "classificar-risco", "sublabel": "Edge Function (Deno)", "pos": [640, 170], "size": [160, 70], "tag": "até 50 por chamada", "sources": [{ "path": "supabase/functions/classificar-risco/index.ts", "line": 57, "end_line": 129 }] },
+    { "id": "db", "type": "database", "label": "PostgreSQL", "sublabel": "tabelas, RPCs, triggers", "pos": [640, 340], "size": [160, 70], "tag": "RLS ativo", "sources": [{ "path": "db/01_schema.sql", "line": 41, "end_line": 521 }, { "path": "db/06_rls.sql", "line": 22, "end_line": 35 }] },
+    { "id": "openai", "type": "external", "label": "OpenAI", "sublabel": "gpt-4o-mini", "pos": [1000, 170], "size": [140, 70], "sources": [{ "path": "supabase/functions/classificar-risco/index.ts", "line": 17, "end_line": 43 }] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Projeto Supabase", "wraps": ["auth", "edge", "db"] }
+  ],
+  "connections": [
+    { "id": "uso", "from": "analista", "to": "spa", "label": "HTTPS", "variant": "emphasis" },
+    { "id": "login", "from": "spa", "to": "auth", "label": "login e sessão", "variant": "security" },
+    { "id": "invoke", "from": "spa", "to": "edge", "label": "invoke com JWT", "variant": "emphasis" },
+    { "id": "dados", "from": "spa", "to": "db", "label": "leituras e RPC", "variant": "default" },
+    { "id": "valida", "from": "edge", "to": "auth", "label": "getUser", "variant": "security" },
+    { "id": "grava", "from": "edge", "to": "db", "label": "service role", "variant": "emphasis" },
+    { "id": "ia", "from": "edge", "to": "openai", "label": "intensidades", "variant": "default" },
+    { "id": "serve", "from": "firebase", "to": "spa", "label": "entrega o build", "variant": "default" },
+    { "id": "deploy", "from": "actions", "to": "firebase", "label": "deploy da main", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Sem API própria", "items": ["O frontend usa supabase-js para leituras, RPCs e inserts.", "Só a classificação de risco roda em Edge Function."] },
+    { "dot": "amber", "title": "Score", "items": ["A OpenAI mede a intensidade de cada fator.", "O score é a soma de peso × intensidade.", "Se a chamada falhar, fn_calcular_score_provisorio calcula por regras."] },
+    { "dot": "rose", "title": "Segurança na Alpha", "items": ["RLS exige usuário autenticado, sem isolamento por empresa.", "A service role fica apenas na Edge Function."] }
+  ]
+}

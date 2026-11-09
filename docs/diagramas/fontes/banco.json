@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "diagram_type": "erd",
+  "meta": {
+    "title": "Farol: modelo físico do banco",
+    "locale": "pt-BR",
+    "output": "docs/diagramas/banco.html",
+    "quality_profile": "standard",
+    "repository": { "url": "https://github.com/ggasparott/farol-projeto", "revision": "bf48176b46a627e1640878c116bd855f56d8c066" }
+  },
+  "layout": { "mode": "grid", "gapX": 90, "gapY": 40, "entityW": 290 },
+  "entities": [
+    { "id": "usuario", "label": "usuario", "tag": "identidade e importação", "row": 0, "col": 0, "sources": [{ "path": "db/01_schema.sql", "line": 41, "end_line": 51 }], "attributes": [
+      { "name": "id", "type": "uuid", "key": "pk" }, { "name": "nome", "type": "varchar(120)" }, { "name": "email", "type": "varchar(160)", "key": "uk" }, { "name": "papel", "type": "papel_usuario" }, { "name": "ativo", "type": "boolean" }, { "name": "criado_em", "type": "timestamptz" }, { "name": "atualizado_em", "type": "timestamptz" } ] },
+    { "id": "importacao", "label": "importacao", "tag": "identidade e importação", "row": 1, "col": 0, "sources": [{ "path": "db/01_schema.sql", "line": 152, "end_line": 171 }], "attributes": [
+      { "name": "id", "type": "bigint", "key": "pk" }, { "name": "origem", "type": "origem_importacao" }, { "name": "nome_arquivo", "type": "varchar(255)" }, { "name": "usuario_id", "type": "uuid", "key": "fk", "references": "usuario.id" }, { "name": "status", "type": "status_importacao" }, { "name": "total_linhas", "type": "integer" }, { "name": "total_gravados", "type": "integer" }, { "name": "total_rejeitados", "type": "integer" }, { "name": "iniciada_em", "type": "timestamptz" }, { "name": "finalizada_em", "type": "timestamptz" } ] },
+    { "id": "importacao_erro", "label": "importacao_erro", "tag": "identidade e importação", "row": 2, "col": 0, "sources": [{ "path": "db/01_schema.sql", "line": 175, "end_line": 187 }], "attributes": [
+      { "name": "importacao_id", "type": "bigint", "key": ["pk", "fk"], "references": "importacao.id" }, { "name": "numero_linha", "type": "integer", "key": "pk" }, { "name": "campo", "type": "varchar(60)" }, { "name": "mensagem", "type": "text" }, { "name": "conteudo_bruto", "type": "jsonb" }, { "name": "registrado_em", "type": "timestamptz" } ] },
+    { "id": "cliente", "label": "cliente", "tag": "dados do cliente", "row": 0, "col": 1, "sources": [{ "path": "db/01_schema.sql", "line": 114, "end_line": 138 }], "attributes": [
+      { "name": "id", "type": "bigint", "key": "pk" }, { "name": "razao_social", "type": "varchar(150)" }, { "name": "cnpj", "type": "char(14)", "key": "uk" }, { "name": "segmento", "type": "varchar(80)" }, { "name": "plano", "type": "varchar(60)" }, { "name": "valor_mensal", "type": "numeric(12,2)" }, { "name": "data_inicio_contrato", "type": "date" }, { "name": "data_cancelamento", "type": "date" }, { "name": "status", "type": "status_cliente" }, { "name": "usuario_id", "type": "uuid", "key": "fk", "references": "usuario.id" }, { "name": "criado_em", "type": "timestamptz" }, { "name": "atualizado_em", "type": "timestamptz" } ] },
+    { "id": "dado_uso", "label": "dado_uso", "tag": "dados do cliente", "row": 1, "col": 1, "sources": [{ "path": "db/01_schema.sql", "line": 197, "end_line": 216 }], "attributes": [
+      { "name": "cliente_id", "type": "bigint", "key": ["pk", "fk"], "references": "cliente.id" }, { "name": "competencia", "type": "date", "key": "pk" }, { "name": "qtd_acessos", "type": "integer" }, { "name": "minutos_uso", "type": "integer" }, { "name": "qtd_usuarios_ativos", "type": "integer" }, { "name": "importacao_id", "type": "bigint", "key": "fk", "references": "importacao.id" }, { "name": "registrado_em", "type": "timestamptz" } ] },
+    { "id": "atendimento", "label": "atendimento", "width": 316, "tag": "dados do cliente", "row": 2, "col": 1, "sources": [{ "path": "db/01_schema.sql", "line": 220, "end_line": 247 }], "attributes": [
+      { "name": "id", "type": "bigint", "key": "pk" }, { "name": "cliente_id", "type": "bigint", "key": "fk", "references": "cliente.id" }, { "name": "protocolo", "type": "varchar(40)" }, { "name": "assunto", "type": "varchar(200)" }, { "name": "criticidade", "type": "criticidade_ticket" }, { "name": "status", "type": "status_atendimento" }, { "name": "aberto_em", "type": "timestamptz" }, { "name": "primeira_resposta_em", "type": "timestamptz" }, { "name": "fechado_em", "type": "timestamptz" }, { "name": "tempo_resposta_horas", "type": "numeric(8,2) gerada" }, { "name": "importacao_id", "type": "bigint", "key": "fk", "references": "importacao.id" }, { "name": "registrado_em", "type": "timestamptz" } ] },
+    { "id": "avaliacao_nps", "label": "avaliacao_nps", "tag": "dados do cliente", "row": 3, "col": 1, "sources": [{ "path": "db/01_schema.sql", "line": 256, "end_line": 277 }], "attributes": [
+      { "name": "id", "type": "bigint", "key": "pk" }, { "name": "cliente_id", "type": "bigint", "key": "fk", "references": "cliente.id" }, { "name": "nota", "type": "smallint" }, { "name": "categoria", "type": "varchar(10) gerada" }, { "name": "comentario", "type": "text" }, { "name": "data_coleta", "type": "date" }, { "name": "importacao_id", "type": "bigint", "key": "fk", "references": "importacao.id" }, { "name": "registrado_em", "type": "timestamptz" } ] },
+    { "id": "modelo_ia", "label": "modelo_ia", "tag": "risco", "row": 0, "col": 2, "sources": [{ "path": "db/01_schema.sql", "line": 290, "end_line": 306 }], "attributes": [
+      { "name": "id", "type": "integer", "key": "pk" }, { "name": "versao", "type": "varchar(20)", "key": "uk" }, { "name": "algoritmo", "type": "varchar(80)" }, { "name": "descricao", "type": "text" }, { "name": "limiar_medio", "type": "numeric(4,3)" }, { "name": "limiar_alto", "type": "numeric(4,3)" }, { "name": "acuracia", "type": "numeric(5,4)" }, { "name": "treinado_em", "type": "date" }, { "name": "ativo", "type": "boolean" }, { "name": "criado_em", "type": "timestamptz" } ] },
+    { "id": "analise_risco", "label": "analise_risco", "tag": "risco", "row": 1, "col": 2, "sources": [{ "path": "db/01_schema.sql", "line": 317, "end_line": 340 }], "attributes": [
+      { "name": "id", "type": "bigint", "key": "pk" }, { "name": "cliente_id", "type": "bigint", "key": "fk", "references": "cliente.id" }, { "name": "modelo_id", "type": "integer", "key": "fk", "references": "modelo_ia.id" }, { "name": "score", "type": "numeric(5,4)" }, { "name": "nivel_risco", "type": "nivel_risco" }, { "name": "origem", "type": "origem_analise" }, { "name": "vigente", "type": "boolean" }, { "name": "executada_em", "type": "timestamptz" } ] },
+    { "id": "fator_risco", "label": "fator_risco", "tag": "risco", "row": 2, "col": 2, "sources": [{ "path": "db/01_schema.sql", "line": 358, "end_line": 370 }], "attributes": [
+      { "name": "analise_id", "type": "bigint", "key": ["pk", "fk"], "references": "analise_risco.id" }, { "name": "fator_codigo", "type": "varchar(40)", "key": ["pk", "fk"], "references": "fator.codigo" }, { "name": "valor_observado", "type": "numeric(12,2)" }, { "name": "contribuicao", "type": "numeric(5,4)" } ] },
+    { "id": "fator", "label": "fator", "tag": "risco", "row": 3, "col": 2, "sources": [{ "path": "db/01_schema.sql", "line": 346, "end_line": 353 }], "attributes": [
+      { "name": "codigo", "type": "varchar(40)", "key": "pk" }, { "name": "nome", "type": "varchar(120)" }, { "name": "descricao", "type": "text" }, { "name": "peso_padrao", "type": "numeric(4,3)" } ] },
+    { "id": "acao_aplicada", "label": "acao_aplicada", "tag": "ações de retenção", "row": 0, "col": 3, "sources": [{ "path": "db/01_schema.sql", "line": 398, "end_line": 421 }], "attributes": [
+      { "name": "id", "type": "bigint", "key": "pk" }, { "name": "cliente_id", "type": "bigint", "key": "fk", "references": "cliente.id" }, { "name": "acao_id", "type": "integer", "key": "fk", "references": "acao_retencao.id" }, { "name": "analise_id", "type": "bigint", "key": "fk", "references": "analise_risco.id" }, { "name": "usuario_id", "type": "uuid", "key": "fk", "references": "usuario.id" }, { "name": "status", "type": "status_acao" }, { "name": "prioridade", "type": "smallint" }, { "name": "observacao", "type": "text" }, { "name": "sugerida_em", "type": "timestamptz" }, { "name": "executada_em", "type": "timestamptz" } ] },
+    { "id": "acao_retencao", "label": "acao_retencao", "tag": "ações de retenção", "row": 1, "col": 3, "sources": [{ "path": "db/01_schema.sql", "line": 381, "end_line": 396 }], "attributes": [
+      { "name": "id", "type": "integer", "key": "pk" }, { "name": "codigo", "type": "varchar(30)", "key": "uk" }, { "name": "nome", "type": "varchar(120)" }, { "name": "descricao", "type": "text" }, { "name": "fator_codigo", "type": "varchar(40)", "key": "fk", "references": "fator.codigo" }, { "name": "nivel_minimo", "type": "nivel_risco" }, { "name": "peso_prioridade", "type": "smallint" }, { "name": "ativo", "type": "boolean" } ] }
+  ],
+  "relationships": [
+    { "id": "cli_usu", "from": "cliente", "to": "usuario", "fromCardinality": "many", "fromOptional": true, "toCardinality": "one", "toOptional": true, "identifying": false },
+    { "id": "imp_usu", "from": "importacao", "to": "usuario", "fromCardinality": "many", "fromOptional": true, "toCardinality": "one", "toOptional": true, "identifying": false },
+    { "id": "err_imp", "from": "importacao_erro", "to": "importacao", "fromCardinality": "many", "fromOptional": true, "toCardinality": "one" },
+    { "id": "uso_cli", "from": "dado_uso", "to": "cliente", "fromCardinality": "many", "fromOptional": true, "toCardinality": "one" },
+    { "id": "uso_imp", "from": "dado_uso", "to": "importacao", "fromCardinality": "many", "fromOptional": true, "toCardinality": "one", "toOptional": true, "identifying": false },
+    { "id": "ate_cli", "from": "atendimento", "to": "cliente", "fromCardinality": "many", "fromOptional": true, "toCardinality": "one" },
+    { "id": "ate_imp", "from": "atendimento", "to": "importacao", "fromCardinality": "many", "fromOptional": true, "toCardinality": "one", "toOptional": true, "identifying": false },
+    { "id": "nps_cli", "from": "avaliacao_nps", "to": "cliente", "fromCardinality": "many", "fromOptional": true, "toCardinality": "one" },
+    { "id": "nps_imp", "from": "avaliacao_nps", "to": "importacao", "fromCardinality": "many", "fromOptional": true, "toCardinality": "one", "toOptional": true, "identifying": false },
+    { "id": "ana_cli", "from": "analise_risco", "to": "cliente", "fromCardinality": "many", "fromOptional": true, "toCardinality": "one" },
+    { "id": "ana_mod", "from": "analise_risco", "to": "modelo_ia", "fromCardinality": "many", "fromOptional": true, "toCardinality": "one" },
+    { "id": "fr_ana", "from": "fator_risco", "to": "analise_risco", "fromCardinality": "many", "fromOptional": true, "toCardinality": "one" },
+    { "id": "fr_fat", "from": "fator_risco", "to": "fator", "fromCardinality": "many", "fromOptional": true, "toCardinality": "one" },
+    { "id": "ret_fat", "from": "acao_retencao", "to": "fator", "fromCardinality": "many", "fromOptional": true, "toCardinality": "one" },
+    { "id": "apl_cli", "from": "acao_aplicada", "to": "cliente", "fromCardinality": "many", "fromOptional": true, "toCardinality": "one" },
+    { "id": "apl_ret", "from": "acao_aplicada", "to": "acao_retencao", "fromCardinality": "many", "fromOptional": true, "toCardinality": "one" },
+    { "id": "apl_ana", "from": "acao_aplicada", "to": "analise_risco", "fromCardinality": "many", "fromOptional": true, "toCardinality": "one", "toOptional": true, "identifying": false },
+    { "id": "apl_usu", "from": "acao_aplicada", "to": "usuario", "fromCardinality": "many", "fromOptional": true, "toCardinality": "one", "toOptional": true, "identifying": false }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Invariantes no banco", "items": ["Índice parcial garante uma análise vigente por cliente.", "Triggers trocam a vigência e classificam o nível pelos limiares do modelo ativo."] },
+    { "dot": "amber", "title": "Histórico preservado", "items": ["Análises e ações usam RESTRICT a partir de cliente.", "Dados brutos mantêm o cliente; a origem na importação vira nula se o lote sumir."] }
+  ]
+}
