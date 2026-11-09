@@ -27,7 +27,7 @@ Entregar e demonstrar o fluxo essencial do Farol com dados sintéticos: importar
 
 ## Critério de aceite
 
-A Alpha está pronta quando os testes TA03 a TA14 aplicáveis forem executados, todos os testes de prioridade alta forem aprovados e nenhum defeito crítico estiver aberto.
+A Alpha está pronta quando os testes TA01 a TA14 aplicáveis forem executados, todos os testes de prioridade alta forem aprovados e nenhum defeito crítico estiver aberto.
 
 ## Roteiro curto de demonstração
 

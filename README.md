@@ -36,16 +36,16 @@ farol-projeto/
 ├── agent/                 # reservado (vazio)
 └── docs/
     ├── requisitos/        # TAP, manual, casos de uso, diagramas e entrega do banco
-    └── diagramas/         # Diagramas exportados / fontes
+    └── diagramas/         # Arquitetura, banco e sequência (HTML) e fontes
 ```
 
 ## Escopo da Versão Alpha
 
-Casos de uso priorizados: **UC01** cadastrar cliente, **UC02** importar dados, **UC06/UC07** calcular e classificar risco, **UC08** painel de clientes em risco, **UC09** detalhes do cliente, **UC10** sugestões de retenção e **UC12** atualizar análise.
+Casos de uso priorizados: **UC01** cadastrar cliente, **UC02 a UC05** importar e registrar dados, **UC06/UC07** calcular e classificar risco, **UC08/UC11** painel priorizado de clientes em risco, **UC09** detalhes do cliente, **UC10** sugestões de retenção e **UC12** atualizar análise.
 
 Ficam para depois a origem por API simulada e um agente de IA mais completo. A priorização (UC11) sai da ordenação do painel.
 
-O recorte completo, os itens adiados e o roteiro de demonstração estão em [`docs/ESCOPO_ALPHA.md`](docs/ESCOPO_ALPHA.md). O resultado dos testes TA03–TA14 deve ser registrado em [`docs/CHECKLIST_ALPHA.md`](docs/CHECKLIST_ALPHA.md).
+O recorte completo, os itens adiados e o roteiro de demonstração estão em [`docs/ESCOPO_ALPHA.md`](docs/ESCOPO_ALPHA.md). O resultado dos testes TA01–TA14 deve ser registrado em [`docs/CHECKLIST_ALPHA.md`](docs/CHECKLIST_ALPHA.md).
 
 ## Como rodar
 
@@ -86,7 +86,7 @@ npm run dev
 
 ## Documentação
 
-Tudo em [docs/requisitos/](docs/requisitos/): casos de uso e testes de aceitação TA01–TA14, diagramas de classe, estado e sequência, TAP e manual do projeto.
+O índice completo, os diagramas do sistema implementado e as divergências entre projeto e código estão em [docs/DOCUMENTACAO.md](docs/DOCUMENTACAO.md). Os artefatos originais estão em [docs/requisitos/](docs/requisitos/).
 
 O passo a passo de publicação e CI/CD está em [docs/DEPLOY_FIREBASE.md](docs/DEPLOY_FIREBASE.md). O workflow valida pull requests, cria previews temporários e publica automaticamente a branch `main` no Firebase Hosting.
 
@@ -95,3 +95,4 @@ O passo a passo de publicação e CI/CD está em [docs/DEPLOY_FIREBASE.md](docs/
 - 22/10–25/10/2026: preparação do ambiente e dos dados de teste
 - 26/10–30/10/2026: execução dos testes de aceitação com o PO
 - 04/11/2026: Entrega 09, testes de aceitação
+- 11/11/2026: Entrega 10, documentação do projeto
