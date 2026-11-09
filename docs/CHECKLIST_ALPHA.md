@@ -30,3 +30,18 @@ Preencher `Resultado` com `Aprovado`, `Reprovado` ou `Não executado` e registra
 | Scripts versionados comparados com o banco atual | Não executado |
 | Edge Function implantada e autenticada | Não executado |
 | Fluxo completo executado no ambiente Alpha | Não executado |
+
+## Testes adicionais do plano
+
+O plano de testes do Notion inclui TA15 a TA22, fora do critério de aceite da Alpha. Neste checklist, o ID TA15 passou a identificar a importação para cliente cadastrado manualmente; o TA15 original do Notion aparece abaixo como TA15-N. As divergências que afetam esses casos estão em [DOCUMENTACAO.md](DOCUMENTACAO.md).
+
+| ID | Verificação | Prioridade | Resultado | Observação |
+| --- | --- | --- | --- | --- |
+| TA15-N | Rejeitar importação com API simulada indisponível | Alta | Não aplicável | API simulada fora da Alpha |
+| TA16 | Tratar falha do serviço de predição | Alta | Não executado | O código usa cálculo por regras, não o último score |
+| TA17 | Inativar e reativar cliente | Média | Não executado | |
+| TA18 | Cancelar cliente e impedir reativação | Média | Não executado | |
+| TA19 | Mudar o nível de médio para alto após novos dados | Alta | Não executado | |
+| TA20 | Executar ação sugerida | Média | Não executado | A tela registra a ação como `PLANEJADA` |
+| TA21 | Descartar ação com motivo | Baixa | Não executado | |
+| TA22 | Importação parcial com linhas válidas e inválidas | Média | Não executado | |
