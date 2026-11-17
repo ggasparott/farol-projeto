@@ -8,6 +8,8 @@ import Importar from './pages/Importar'
 import Login from './pages/Login'
 import Cadastro from './pages/Cadastro'
 import ClienteCadastro from './pages/ClienteCadastro'
+import EsqueciSenha from './pages/EsqueciSenha'
+import RedefinirSenha from './pages/RedefinirSenha'
 
 export default function App() {
   return (
@@ -17,6 +19,8 @@ export default function App() {
           {/* Rotas Públicas */}
           <Route path="/login" element={<Login />} />
           <Route path="/cadastro" element={<Cadastro />} />
+          <Route path="/esqueci-senha" element={<EsqueciSenha />} />
+          <Route path="/redefinir-senha" element={<RedefinirSenha />} />
 
           {/* Rotas Protegidas */}
           <Route element={<ProtectedRoute />}>

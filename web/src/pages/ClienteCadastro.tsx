@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Aviso from '../components/Aviso'
 import { useAuth } from '../contexts/AuthContext'
-import { cnpjValido } from '../lib/cnpj'
+import { CAMPOS_OBRIGATORIOS, ROTULO_CAMPO, normalizarValor, validarCampos } from '../lib/validacaoCliente'
+import type { CampoCliente } from '../lib/validacaoCliente'
 import { supabase } from '../lib/supabase'
 
 type ArquivosExtras = {
@@ -34,16 +35,28 @@ export default function ClienteCadastro() {
   })
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [tocados, setTocados] = useState<Partial<Record<CampoCliente, boolean>>>({})
+  const [tentouEnviar, setTentouEnviar] = useState(false)
+
+  const errosCampos = validarCampos({ razao_social: razaoSocial, cnpj, segmento, plano, valor_mensal: valorMensal, data_inicio_contrato: dataInicio })
+  const ausentes = CAMPOS_OBRIGATORIOS.filter((campo) => errosCampos[campo]?.includes('não informad'))
+  const mostrarErro = (campo: CampoCliente) => (tentouEnviar || tocados[campo]) ? errosCampos[campo] : undefined
+  const tocar = (campo: CampoCliente) => () => setTocados((atual) => ({ ...atual, [campo]: true }))
+  const classeCampo = (campo: CampoCliente) => `mt-1 block w-full border p-2 font-normal focus:outline-none ${mostrarErro(campo) ? 'border-risco-alto bg-[#fff0ec] focus:border-risco-alto' : 'border-linha focus:border-aco'}`
+  const obrigatorio = <span className="text-risco-alto" aria-hidden="true"> *</span>
+  const erroCampo = (campo: CampoCliente) => mostrarErro(campo) ? <span id={`erro-${campo}`} className="mt-1 block text-xs font-semibold text-risco-alto">{mostrarErro(campo)}</span> : null
+  const aria = (campo: CampoCliente) => ({ 'aria-invalid': Boolean(mostrarErro(campo)), 'aria-describedby': mostrarErro(campo) ? `erro-${campo}` : undefined, onBlur: tocar(campo) })
 
   async function cadastrar(e: React.FormEvent) {
     e.preventDefault()
     setErro(null)
 
-    const cnpjNormalizado = cnpj.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
-    if (!cnpjValido(cnpjNormalizado)) {
-      setErro('Informe um CNPJ válido, com os dígitos verificadores corretos.')
+    setTentouEnviar(true)
+    if (Object.keys(errosCampos).length > 0) {
+      setErro('Revise os campos destacados antes de cadastrar.')
       return
     }
+    const cnpjNormalizado = cnpj.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
 
     setSalvando(true)
     const { data, error } = await supabase
@@ -53,7 +66,7 @@ export default function ClienteCadastro() {
         cnpj: cnpjNormalizado,
         segmento: segmento.trim(),
         plano: plano.trim(),
-        valor_mensal: valorMensal === '' ? null : Number(valorMensal),
+        valor_mensal: normalizarValor(valorMensal),
         data_inicio_contrato: dataInicio,
         usuario_id: user?.id ?? null,
       })
@@ -93,79 +106,93 @@ export default function ClienteCadastro() {
         </Link>
       </header>
 
-      <form onSubmit={cadastrar} className="max-w-3xl space-y-5 border border-linha bg-white p-5">
-        {erro && <Aviso tipo="erro">{erro}</Aviso>}
+      <form onSubmit={cadastrar} noValidate className="max-w-3xl space-y-5 border border-linha bg-white p-5">
+        <p className="text-xs text-suave">Campos marcados com <span className="font-bold text-risco-alto">*</span> são obrigatórios.</p>
+        {erro && <Aviso tipo="erro">
+          <p className="font-bold">{erro}</p>
+          {tentouEnviar && ausentes.length > 0 && <p className="mt-1">Faltam dados importantes: {ausentes.map((campo) => ROTULO_CAMPO[campo]).join(', ')}.</p>}
+        </Aviso>}
 
         <div className="grid gap-4 md:grid-cols-2">
           <label className="text-sm font-bold md:col-span-2">
-            Razão social
+            Razão social{obrigatorio}
             <input
               required
               minLength={2}
               maxLength={150}
               value={razaoSocial}
               onChange={(e) => setRazaoSocial(e.target.value)}
-              className="mt-1 block w-full border border-linha p-2 font-normal focus:border-aco focus:outline-none"
+              {...aria('razao_social')}
+              className={classeCampo('razao_social')}
             />
+            {erroCampo('razao_social')}
           </label>
 
           <label className="text-sm font-bold">
-            CNPJ
+            CNPJ{obrigatorio}
             <input
               required
               value={cnpj}
               onChange={(e) => setCnpj(e.target.value)}
               placeholder="00.000.000/0000-00"
-              className="mt-1 block w-full border border-linha p-2 font-normal focus:border-aco focus:outline-none"
+              {...aria('cnpj')}
+              className={classeCampo('cnpj')}
             />
+            {erroCampo('cnpj')}
           </label>
 
           <label className="text-sm font-bold">
-            Data de início do contrato
+            Data de início do contrato{obrigatorio}
             <input
               required
               type="date"
               value={dataInicio}
               onChange={(e) => setDataInicio(e.target.value)}
-              className="mt-1 block w-full border border-linha p-2 font-normal focus:border-aco focus:outline-none"
+              {...aria('data_inicio_contrato')}
+              className={classeCampo('data_inicio_contrato')}
             />
+            {erroCampo('data_inicio_contrato')}
           </label>
 
           <label className="text-sm font-bold">
-            Segmento
+            Segmento{obrigatorio}
             <input
               required
               maxLength={80}
               value={segmento}
               onChange={(e) => setSegmento(e.target.value)}
               placeholder="Ex.: Tecnologia"
-              className="mt-1 block w-full border border-linha p-2 font-normal focus:border-aco focus:outline-none"
+              {...aria('segmento')}
+              className={classeCampo('segmento')}
             />
+            {erroCampo('segmento')}
           </label>
 
           <label className="text-sm font-bold">
-            Plano
+            Plano{obrigatorio}
             <input
               required
               maxLength={60}
               value={plano}
               onChange={(e) => setPlano(e.target.value)}
               placeholder="Ex.: Profissional"
-              className="mt-1 block w-full border border-linha p-2 font-normal focus:border-aco focus:outline-none"
+              {...aria('plano')}
+              className={classeCampo('plano')}
             />
+            {erroCampo('plano')}
           </label>
 
           <label className="text-sm font-bold">
             Valor mensal
             <input
-              type="number"
-              min="0"
-              step="0.01"
+              inputMode="decimal"
               value={valorMensal}
               onChange={(e) => setValorMensal(e.target.value)}
               placeholder="Opcional"
-              className="mt-1 block w-full border border-linha p-2 font-normal focus:border-aco focus:outline-none"
+              {...aria('valor_mensal')}
+              className={classeCampo('valor_mensal')}
             />
+            {erroCampo('valor_mensal')}
           </label>
         </div>
 

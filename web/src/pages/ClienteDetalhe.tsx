@@ -7,7 +7,8 @@ import { useCliente } from '../hooks/useCliente'
 import { cnpjValido } from '../lib/cnpj'
 import { supabase } from '../lib/supabase'
 import type { AcaoAplicada } from '../types'
-import { validarDadosBasicos } from '../lib/validacaoCliente'
+import { normalizarValor, validarCampos, validarDadosBasicos } from '../lib/validacaoCliente'
+import type { CampoCliente } from '../lib/validacaoCliente'
 import { fmtData, fmtDataHora, ORDEM, pct } from '../lib/risco'
 
 function Card({ titulo, descricao, children, className = '' }: { titulo: string; descricao?: string; children: ReactNode; className?: string }) {
@@ -41,6 +42,8 @@ export default function ClienteDetalhe() {
   const [editando, setEditando] = useState(false)
   const [salvandoDados, setSalvandoDados] = useState(false)
   const [erroDados, setErroDados] = useState<string | null>(null)
+  const [alterandoStatus, setAlterandoStatus] = useState(false)
+  const [erroStatus, setErroStatus] = useState<string | null>(null)
   const [dadosBasicos, setDadosBasicos] = useState<DadosBasicos>({
     razao_social: '', cnpj: '', segmento: '', plano: '', valor_mensal: '', data_inicio_contrato: '',
   })
@@ -65,6 +68,11 @@ export default function ClienteDetalhe() {
   const { cliente, analise, uso, atendimentos, nps, acoes } = dados
   const problemasCliente = validarDadosBasicos(cliente)
   const problemasEdicao = validarDadosBasicos(dadosBasicos)
+  const errosEdicao = validarCampos(dadosBasicos)
+  const erroEdicao = (campo: CampoCliente) => errosEdicao[campo] ? <span className="mt-1 block text-xs font-semibold text-risco-alto">{errosEdicao[campo]}</span> : null
+  const classeEdicao = (campo: CampoCliente) => `mt-1 block w-full rounded-lg border p-2 font-normal focus:outline-none ${errosEdicao[campo] ? 'border-risco-alto bg-[#fff0ec] focus:border-risco-alto' : 'border-linha focus:border-aco'}`
+  const inativo = cliente.status === 'INATIVO'
+  const podeAlterarStatus = cliente.status === 'ATIVO' || inativo
   const registrosAcao = new Map<number, AcaoAplicada[]>()
   for (const registro of [...dados.acoesRegistradas, ...registradas]) {
     registrosAcao.set(registro.acao_id, [...(registrosAcao.get(registro.acao_id) ?? []), registro])
@@ -97,7 +105,7 @@ export default function ClienteDetalhe() {
 
     const cnpjNormalizado = dadosBasicos.cnpj.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
 
-    const valorMensal = dadosBasicos.valor_mensal.trim() === '' ? null : Number(dadosBasicos.valor_mensal)
+    const valorMensal = normalizarValor(dadosBasicos.valor_mensal)
 
     setSalvandoDados(true)
     try {
@@ -134,6 +142,22 @@ export default function ClienteDetalhe() {
     }
   }
 
+  async function alterarStatus(novoStatus: 'ATIVO' | 'INATIVO') {
+    if (novoStatus === 'INATIVO' && !window.confirm(`Desativar ${cliente.razao_social}? O cliente sai do painel e das próximas análises de risco, mas o histórico é mantido e ele pode ser reativado depois.`)) return
+    setErroStatus(null)
+    setAlterandoStatus(true)
+    try {
+      const { data, error } = await supabase.from('cliente').update({ status: novoStatus }).eq('id', cliente.id).select('id').maybeSingle()
+      if (error) throw new Error(error.message)
+      if (!data) throw new Error('Não foi possível alterar o status. Verifique se você tem acesso a este cadastro.')
+      if (!await recarregar()) throw new Error('O status foi alterado, mas não foi possível recarregar o perfil.')
+    } catch (e) {
+      setErroStatus(e instanceof Error ? e.message : 'Não foi possível alterar o status do cliente.')
+    } finally {
+      setAlterandoStatus(false)
+    }
+  }
+
   function abrirEdicaoDados() {
     setDadosBasicos({
       razao_social: cliente.razao_social,
@@ -165,7 +189,12 @@ export default function ClienteDetalhe() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <span className="rounded-full bg-petroleo-claro px-3 py-1.5 text-xs font-bold text-aco">{cliente.status}</span>
+              <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${inativo ? 'bg-linha text-suave' : 'bg-petroleo-claro text-aco'}`}>{cliente.status}</span>
+              {podeAlterarStatus && (
+                <button type="button" disabled={alterandoStatus} onClick={() => alterarStatus(inativo ? 'ATIVO' : 'INATIVO')} className={`rounded-lg border px-4 py-2 text-xs font-bold uppercase tracking-wider disabled:opacity-50 ${inativo ? 'border-aco text-aco hover:bg-petroleo-claro' : 'border-risco-alto text-risco-alto hover:bg-[#fff0ec]'}`}>
+                  {alterandoStatus ? 'Salvando…' : inativo ? 'Reativar cliente' : 'Desativar cliente'}
+                </button>
+              )}
               <button type="button" onClick={editando ? () => setEditando(false) : abrirEdicaoDados} className="rounded-lg border border-aco px-4 py-2 text-xs font-bold uppercase tracking-wider text-aco hover:bg-petroleo-claro">
                 {editando ? 'Fechar edição' : problemasCliente.length > 0 ? 'Corrigir dados' : 'Editar dados'}
               </button>
@@ -187,6 +216,9 @@ export default function ClienteDetalhe() {
         </div>
       </div>
     </section>
+
+    {erroStatus && <div className="mb-4"><Aviso tipo="erro">{erroStatus}</Aviso></div>}
+    {inativo && <div className="mb-4"><Aviso>Cliente inativo: ele não aparece no painel de risco e não entra nas próximas análises. O histórico continua disponível. Use “Reativar cliente” para voltar a acompanhá-lo.</Aviso></div>}
 
     {problemasCliente.length > 0 && (
       <div className="mb-4">
@@ -216,24 +248,29 @@ export default function ClienteDetalhe() {
         <form onSubmit={salvarDadosBasicos} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-bold sm:col-span-2">Razão social
-              <input required minLength={2} maxLength={150} value={dadosBasicos.razao_social} onChange={(e) => setDadosBasicos((atual) => ({ ...atual, razao_social: e.target.value }))} className="mt-1 block w-full rounded-lg border border-linha p-2 font-normal focus:border-aco focus:outline-none" />
+              <input required minLength={2} maxLength={150} value={dadosBasicos.razao_social} onChange={(e) => setDadosBasicos((atual) => ({ ...atual, razao_social: e.target.value }))} className={classeEdicao('razao_social')} />
+              {erroEdicao('razao_social')}
             </label>
             <label className="text-sm font-bold">CNPJ
               <input required value={dadosBasicos.cnpj} aria-invalid={!cnpjEditavelValido} aria-describedby="cnpj-validacao" onChange={(e) => setDadosBasicos((atual) => ({ ...atual, cnpj: e.target.value }))} placeholder="00.000.000/0000-00" className={`mt-1 block w-full rounded-lg border p-2 font-normal focus:outline-none ${cnpjEditavelValido ? 'border-linha focus:border-aco' : 'border-risco-alto bg-[#fff0ec] text-risco-alto focus:border-risco-alto focus:ring-1 focus:ring-risco-alto'}`} />
-              {!cnpjEditavelValido && <span id="cnpj-validacao" className="mt-1 block text-xs font-semibold text-risco-alto">CNPJ inválido. Confira os dígitos verificadores.</span>}
+              {!cnpjEditavelValido && <span id="cnpj-validacao" className="mt-1 block text-xs font-semibold text-risco-alto">{errosEdicao.cnpj ?? 'CNPJ inválido. Confira os dígitos verificadores.'}</span>}
               {cnpjEditavelValido && <span id="cnpj-validacao" className="mt-1 block text-xs font-semibold text-risco-baixo">CNPJ válido.</span>}
             </label>
             <label className="text-sm font-bold">Data de início do contrato
-              <input required type="date" value={dadosBasicos.data_inicio_contrato} onChange={(e) => setDadosBasicos((atual) => ({ ...atual, data_inicio_contrato: e.target.value }))} className="mt-1 block w-full rounded-lg border border-linha p-2 font-normal focus:border-aco focus:outline-none" />
+              <input required type="date" value={dadosBasicos.data_inicio_contrato} onChange={(e) => setDadosBasicos((atual) => ({ ...atual, data_inicio_contrato: e.target.value }))} className={classeEdicao('data_inicio_contrato')} />
+              {erroEdicao('data_inicio_contrato')}
             </label>
             <label className="text-sm font-bold">Segmento
-              <input required maxLength={80} value={dadosBasicos.segmento} onChange={(e) => setDadosBasicos((atual) => ({ ...atual, segmento: e.target.value }))} className="mt-1 block w-full rounded-lg border border-linha p-2 font-normal focus:border-aco focus:outline-none" />
+              <input required maxLength={80} value={dadosBasicos.segmento} onChange={(e) => setDadosBasicos((atual) => ({ ...atual, segmento: e.target.value }))} className={classeEdicao('segmento')} />
+              {erroEdicao('segmento')}
             </label>
             <label className="text-sm font-bold">Plano
-              <input required maxLength={60} value={dadosBasicos.plano} onChange={(e) => setDadosBasicos((atual) => ({ ...atual, plano: e.target.value }))} className="mt-1 block w-full rounded-lg border border-linha p-2 font-normal focus:border-aco focus:outline-none" />
+              <input required maxLength={60} value={dadosBasicos.plano} onChange={(e) => setDadosBasicos((atual) => ({ ...atual, plano: e.target.value }))} className={classeEdicao('plano')} />
+              {erroEdicao('plano')}
             </label>
             <label className="text-sm font-bold">Valor mensal
-              <input type="number" min="0" step="0.01" value={dadosBasicos.valor_mensal} onChange={(e) => setDadosBasicos((atual) => ({ ...atual, valor_mensal: e.target.value }))} placeholder="Opcional" className="mt-1 block w-full rounded-lg border border-linha p-2 font-normal focus:border-aco focus:outline-none" />
+              <input inputMode="decimal" value={dadosBasicos.valor_mensal} onChange={(e) => setDadosBasicos((atual) => ({ ...atual, valor_mensal: e.target.value }))} placeholder="Opcional" className={classeEdicao('valor_mensal')} />
+              {erroEdicao('valor_mensal')}
             </label>
           </div>
           <div className="flex gap-3">

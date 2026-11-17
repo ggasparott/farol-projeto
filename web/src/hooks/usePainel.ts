@@ -23,7 +23,7 @@ interface ClientePainel {
 }
 
 // Exibe clientes com score em ordem de risco e mantém os sem score fora do ranking.
-export function usePainel(filtro: NivelRisco | 'TODOS') {
+export function usePainel(filtro: NivelRisco | 'TODOS', status: 'ATIVO' | 'INATIVO' = 'ATIVO') {
   const [todasLinhas, setTodasLinhas] = useState<LinhaPainel[]>([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
@@ -35,7 +35,7 @@ export function usePainel(filtro: NivelRisco | 'TODOS') {
     supabase
       .from('cliente')
       .select('id, razao_social, cnpj, segmento, plano, valor_mensal, data_inicio_contrato, avaliacao_nps(nota, data_coleta), analise_risco(id, score, nivel_risco, executada_em, vigente)')
-      .eq('status', 'ATIVO')
+      .eq('status', status)
       .order('razao_social')
       .then(({ data, error }) => {
         if (!ativo) return
@@ -77,7 +77,7 @@ export function usePainel(filtro: NivelRisco | 'TODOS') {
         setCarregando(false)
       })
     return () => { ativo = false }
-  }, [revisao])
+  }, [revisao, status])
 
   const linhas = useMemo(
     () => filtro === 'TODOS' ? todasLinhas : todasLinhas.filter((linha) => linha.nivel_risco === filtro),
